@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendário Mahanaim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ================= TELA: LOGIN ================= -->
+<section class="login" id="loginScreen" hidden>
+  <form class="login-card" id="loginForm" novalidate>
+    <div class="logo"><span class="mark">M</span><div><b>Igreja Internacional Mahanaim</b><small>Calendário da liderança</small></div></div>
+    <h1>Entrar</h1>
+    <p class="sub">Use o e-mail e a senha cadastrados pela liderança.</p>
+    <label class="field"><span>E-mail</span><input type="email" id="lgEmail" autocomplete="username" required></label>
+    <label class="field"><span>Senha</span><input type="password" id="lgPass" autocomplete="current-password" required></label>
+    <div class="forgot">
+      <label class="check"><input type="checkbox" id="lgRemember" checked> Lembrar de mim por 30 dias</label>
+      <button type="button" class="linkbtn" id="lgForgot">Esqueci a senha</button>
+    </div>
+    <p class="err" id="lgErr" hidden></p>
+    <button class="btn primary" type="submit" id="lgSubmit">Entrar</button>
+    <div class="demo">
+      <p>Protótipo · acessos de demonstração</p>
+      <div>
+        <button type="button" class="btn sm" data-demo="admin">Entrar como Admin</button>
+        <button type="button" class="btn sm" data-demo="user">Entrar como User</button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<!-- ================= TELA: CALENDÁRIO ================= -->
+<main class="wrap" id="appScreen" hidden>
+  <header class="appbar">
+    <div class="logo"><span class="mark">M</span><div><b>Mahanaim</b><small>Calendário da liderança</small></div></div>
+    <div class="actions">
+      <button class="btn" id="btnRequests" hidden>Solicitações <span class="cnt" id="reqCount" hidden></span></button>
+      <button class="btn" id="btnUsers" hidden>Usuários</button>
+      <button class="btn primary" id="btnNew"></button>
+      <details class="menu" id="userMenu">
+        <summary><span class="avatar" id="avatar"></span><span class="who" id="whoName"></span></summary>
+        <div class="menu-pop">
+          <div class="me"><b id="meName"></b><small id="meEmail"></small><span class="badge" id="meRole"></span></div>
+          <button id="mMine" hidden>Minhas solicitações</button>
+          <button id="mReset" hidden>Restaurar dados de exemplo</button>
+          <button id="mLogout">Sair</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <div class="frame">
+    <div class="top">
+      <div>
+        <p class="brand">Igreja Internacional Mahanaim</p>
+        <h1 id="title"></h1>
+      </div>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Modo de exibição">
+          <button id="vCal" aria-pressed="true">Calendário</button>
+          <button id="vList" aria-pressed="false">Lista</button>
+        </div>
+        <button class="iconbtn" id="prev" aria-label="Mês anterior">‹</button>
+        <button class="iconbtn" id="next" aria-label="Próximo mês">›</button>
+      </div>
+    </div>
+    <nav class="months" id="months" aria-label="Meses"></nav>
+    <div id="campaign"></div>
+
+    <section id="calView">
+      <div class="wk" aria-hidden="true">
+        <div><span class="l">Dom</span><span class="s">D</span></div>
+        <div><span class="l">Seg</span><span class="s">S</span></div>
+        <div><span class="l">Ter</span><span class="s">T</span></div>
+        <div><span class="l">Qua</span><span class="s">Q</span></div>
+        <div><span class="l">Qui</span><span class="s">Q</span></div>
+        <div><span class="l">Sex</span><span class="s">S</span></div>
+        <div><span class="l">Sáb</span><span class="s">S</span></div>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+    <section id="listView" class="list" hidden></section>
+
+    <div class="legend" id="legend"></div>
+  </div>
+</main>
+
+<!-- ================= DIÁLOGO: DIA ================= -->
+<dialog id="dayDlg" aria-labelledby="dayTitle">
+  <div class="dlg-head">
+    <div><h2 id="dayTitle"></h2><p id="daySub"></p></div>
+    <button class="iconbtn" data-close aria-label="Fechar">✕</button>
+  </div>
+  <div class="dlg-body"><ul class="items" id="dayList"></ul></div>
+  <div class="dlg-foot"><button class="btn primary" id="dayAdd"></button></div>
+</dialog>
+
+<!-- ================= DIÁLOGO: EVENTO / SOLICITAÇÃO ================= -->
+<dialog id="formDlg" aria-labelledby="formTitle">
+  <form id="evForm" novalidate>
+    <div class="dlg-head">
+      <div><h2 id="formTitle"></h2><p id="formSub"></p></div>
+      <button type="button" class="iconbtn" data-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="dlg-body">
+      <p class="note" id="fNote" hidden></p>
+      <label class="field"><span>Título</span><input id="fTitle" maxlength="80" required placeholder="Ex.: Ensaio do Louvor"></label>
+      <label class="field"><span>Tipo</span><select id="fCat"></select></label>
+      <div class="row2">
+        <label class="field"><span>Data</span><input type="date" id="fDate" required></label>
+        <label class="field"><span>Horário <small>(opcional)</small></span><input type="time" id="fTime"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="fMulti"> Dura vários dias</label>
+      <label class="field" id="fEndWrap" hidden><span>Data final</span><input type="date" id="fEnd"></label>
+      <label class="field"><span>Local ou observação <small>(opcional)</small></span><input id="fLoc" maxlength="80" placeholder="Ex.: Santo André, No culto"></label>
+      <fieldset id="fScope" hidden>
+        <legend>Este item se repete. Aplicar a:</legend>
+        <label class="check"><input type="radio" name="scope" value="um" checked> Somente este dia</label>
+        <label class="check"><input type="radio" name="scope" value="proximos"> Este e os próximos da série</label>
+      </fieldset>
+      <label class="field" id="fMsgWrap" hidden><span>Mensagem para a liderança <small>(opcional)</small></span><textarea id="fMsg" maxlength="400" placeholder="Explique o motivo, quem participa, se precisa de espaço ou equipe…"></textarea></label>
+      <p class="err" id="fErr" hidden></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn ghost" data-close>Cancelar</button>
+      <button type="submit" class="btn primary" id="fSubmit"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ================= DIÁLOGO: CONFIRMAÇÃO ================= -->
+<dialog id="askDlg" aria-labelledby="askTitle">
+  <form id="askForm">
+    <div class="dlg-head"><div><h2 id="askTitle"></h2><p id="askMsg"></p></div></div>
+    <div class="dlg-body" id="askBody">
+      <fieldset id="askScope" hidden>
+        <legend>Este item se repete. Excluir:</legend>
+        <label class="check"><input type="radio" name="askScope" value="um" checked> Somente este dia</label>
+        <label class="check"><input type="radio" name="askScope" value="proximos"> Este e os próximos da série</label>
+      </fieldset>
+      <label class="field" id="askTextWrap" hidden><span id="askTextLabel"></span><textarea id="askText" maxlength="300"></textarea></label>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn ghost" id="askCancel">Cancelar</button>
+      <button type="submit" class="btn" id="askOk"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ================= DIÁLOGO: SOLICITAÇÕES ================= -->
+<dialog id="reqDlg" class="wide" aria-labelledby="reqTitle">
+  <div class="dlg-head">
+    <div><h2 id="reqTitle"></h2><p id="reqSub"></p></div>
+    <button class="iconbtn" data-close aria-label="Fechar">✕</button>
+  </div>
+  <div class="tabs" role="tablist" id="reqTabs"></div>
+  <div class="dlg-body"><div class="cards" id="reqList"></div></div>
+</dialog>
+
+<!-- ================= DIÁLOGO: USUÁRIOS ================= -->
+<dialog id="usersDlg" class="wide" aria-labelledby="usersTitle">
+  <div class="dlg-head">
+    <div><h2 id="usersTitle">Usuários</h2><p>Admin cria, edita e aprova eventos. User vê o calendário e envia solicitações.</p></div>
+    <button class="iconbtn" data-close aria-label="Fechar">✕</button>
+  </div>
+  <div class="dlg-body">
+    <div class="users" id="usersList"></div>
+    <p class="subhead">Novo acesso</p>
+    <form id="userForm" novalidate>
+      <div class="row2">
+        <label class="field"><span>Nome</span><input id="uName" maxlength="60"></label>
+        <label class="field"><span>E-mail</span><input id="uEmail" type="email" maxlength="80"></label>
+      </div>
+      <div class="row2">
+        <label class="field"><span>Senha provisória</span><input id="uPass" type="text" maxlength="40" placeholder="Mínimo de 6 caracteres"></label>
+        <label class="field"><span>Perfil</span><select id="uRole"><option value="user">User (visualização)</option><option value="admin">Admin</option></select></label>
+      </div>
+      <p class="err" id="uErr" hidden></p>
+      <button class="btn primary" type="submit">Adicionar acesso</button>
+    </form>
+  </div>
+</dialog>
+
+<!-- ================= DIÁLOGO: CAMPANHA DO MÊS ================= -->
+<dialog id="campDlg" aria-labelledby="campTitle">
+  <form id="campForm" novalidate>
+    <div class="dlg-head">
+      <div><h2 id="campTitle">Campanha do mês</h2><p id="campSub"></p></div>
+      <button type="button" class="iconbtn" data-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="dlg-body">
+      <label class="field"><span>Nome</span><input id="cName" maxlength="40" placeholder="Ex.: Setembro Amarelo"></label>
+      <label class="field"><span>Descrição</span><input id="cDesc" maxlength="80" placeholder="Ex.: Prevenção ao suicídio"></label>
+      <div class="field"><span>Cor</span>
+        <div class="swatches" id="cColors"></div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger left" id="cRemove">Remover</button>
+      <button type="button" class="btn ghost" data-close>Cancelar</button>
+      <button type="submit" class="btn primary">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
