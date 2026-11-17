@@ -2,8 +2,8 @@
 
 Calendário da liderança da Igreja Internacional Mahanaim.
 Feito em **TypeScript** (com **Vite** e **Zod** para as validações).
-Ainda **sem banco de dados**: os dados ficam no `localStorage` do navegador,
-através de uma API simulada que já define o contrato do futuro backend.
+Os dados ficam no **Supabase** (Postgres + Auth). Sem configuração, o app roda no
+**modo protótipo**, com dados de exemplo no `localStorage`.
 
 ## Como rodar
 
@@ -19,6 +19,22 @@ npm run dev
 
 Depois acesse http://127.0.0.1:5173.
 
+### Conectar ao Supabase
+
+Copie `.env.example` para `.env.local` e preencha a URL e a chave **publishable**
+(Painel → Project Settings → API Keys). Com isso o app usa o banco real; sem isso, o modo protótipo.
+A chave publishable pode ir para o navegador: quem protege os dados é o RLS do banco.
+**Nunca** coloque a chave `service_role`/secret no `.env.local`.
+
+O primeiro admin é criado no painel (Authentication → Users → Add user) e promovido com:
+
+```sql
+update public.perfis set perfil = 'admin' where email = 'seu-email@exemplo.com';
+```
+
+Os próximos acessos o admin cria pela própria tela de Usuários
+(Edge Function `criar-usuario`).
+
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | servidor de desenvolvimento (recarrega sozinho) |
@@ -26,7 +42,7 @@ Depois acesse http://127.0.0.1:5173.
 | `npm run build` | confere os tipos e gera o site final em `dist/` |
 | `npm run preview` | abre o site gerado em `dist/` |
 
-### Acessos de demonstração
+### Acessos de demonstração (só no modo protótipo)
 
 | Perfil | E-mail | Senha |
 |---|---|---|
@@ -55,7 +71,12 @@ src/domain/types.ts     tipos do domínio (Evento, Usuario, Solicitacao...)
 src/domain/schemas.ts   validações com Zod (reaproveitáveis no servidor)
 src/api/contract.ts     interface CalendarApi = contrato do backend
 src/api/mock.ts         implementação simulada (localStorage)
-src/api/index.ts        escolhe qual implementação o app usa
+src/api/supabase.ts     implementação real (Supabase) + conversões app ↔ banco
+src/api/database.types.ts  tipos gerados a partir do banco
+src/api/index.ts        escolhe a implementação (Supabase se houver .env.local)
+supabase/migrations/    estrutura, carga inicial, ajustes e permissões do banco
+supabase/functions/     Edge Function criar-usuario (usa a chave de serviço no servidor)
+scripts/gerar-carga-inicial.ts  gera a migração de carga a partir de src/data/seed.ts
 src/api/errors.ts       erros com código (NAO_AUTENTICADO, SEM_PERMISSAO...)
 src/data/seed.ts        dados iniciais (vira a carga inicial do banco)
 src/ui/dom.ts           HTML seguro (escape automático)
@@ -81,15 +102,14 @@ src/ui/format.ts        datas e horários
 - **Limite de 10 solicitações pendentes** por pessoa.
 - Dados lidos do armazenamento local também passam por validação antes de serem usados.
 
-## Próxima fase: banco de dados
+## Banco de dados (Supabase)
 
-Criar uma nova implementação de `CalendarApi` (ex.: `src/api/supabase.ts`) e trocá-la em
-`src/api/index.ts`. O TypeScript aponta qualquer método que ficar faltando.
-
-No backend, repetir as mesmas regras (os esquemas de `schemas.ts` podem ser reaproveitados):
-
-- permissões no servidor (ex.: Row Level Security no Supabase);
-- senhas só como hash (o Supabase Auth já faz isso);
-- "lembrar de mim" com sessão do provedor de autenticação, em vez de `localStorage`;
-- limite de tentativas de login no servidor;
-- "Esqueci a senha" (envio de e-mail).
+- **Carga inicial**: cultos (11 séries), eventos especiais, aniversários, datas comemorativas e
+  campanhas do protótipo foram migrados (`..._carga_inicial.sql`). Feriados são gerados pelo banco
+  com `gerar_feriados(ano)`. Usuários e solicitações de demonstração **não** foram migrados.
+- **Permissões**: GRANT só para usuários logados + RLS (todos leem; só admin grava).
+  Usuário comum cria/cancela pedidos pelas funções `solicitar_evento` e `cancelar_solicitacao`.
+- Categorias da tela ↔ tipos do banco: `evento` = `especial`/`conferencia`/`reuniao`,
+  `aniv` = `aniversario`, `data` = `data_comemorativa`.
+- Pendências: "Esqueci a senha" por e-mail; sessão de 30 dias configurada no painel do Auth;
+  bloquear no RLS usuários marcados como inativos.
