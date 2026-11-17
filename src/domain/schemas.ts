@@ -60,7 +60,8 @@ export const senhaNova = z
   .regex(/[A-Za-z]/, 'A senha precisa ter ao menos uma letra.')
   .regex(/\d/, 'A senha precisa ter ao menos um número.');
 
-export const id = z.string().regex(/^[a-z]\d+$/i, 'Identificador inválido.');
+/** Identificador: UUID (banco) ou o formato curto do protótipo (ex.: e12). */
+export const id = z.string().regex(/^([a-z]\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i, 'Identificador inválido.');
 
 // ---------- entradas da API ----------
 // strictObject: recusa campos extras (evita que alguém "injete", por exemplo,

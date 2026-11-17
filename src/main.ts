@@ -2,7 +2,7 @@
 // TELA (front-end). Só conversa com o "servidor" através de `api`.
 // =====================================================================
 import './styles.css';
-import { api, isApiError, mensagemDoErro } from './api';
+import { MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
 import { EventoInput, primeiraMensagem } from './domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA,
@@ -148,7 +148,9 @@ $$<HTMLButtonElement>('[data-demo]').forEach(b => b.addEventListener('click', ()
   lg.pass.value = admin ? 'admin123' : 'membro123';
   lg.form.requestSubmit();
 }));
-$('#lgForgot').addEventListener('click', () => toast('Recuperação de senha por e-mail será definida na fase do banco.'));
+$('#lgForgot').addEventListener('click', () => toast('Recuperação de senha por e-mail ainda não está disponível. Fale com a liderança.'));
+// Botões de acesso de demonstração só existem no modo protótipo
+$<HTMLElement>('#loginForm .demo').hidden = !MODO_DEMO;
 
 async function enterApp(): Promise<void> {
   if (!ME) return showLogin();
@@ -165,7 +167,7 @@ async function enterApp(): Promise<void> {
   $('#btnRequests').hidden = !adm;
   $('#btnUsers').hidden = !adm;
   $('#mMine').hidden = adm;
-  $('#mReset').hidden = !adm;
+  $('#mReset').hidden = !adm || !MODO_DEMO;
   const [longo, curto] = adm ? ['Novo evento', 'Novo'] : ['Solicitar evento', 'Solicitar'];
   setHtml($('#btnNew'), html`<span aria-hidden="true">+</span> <span class="lbl-long">${longo}</span><span class="lbl-short">${curto}</span>`);
   buildMonths();
@@ -612,6 +614,7 @@ const uf = {
   pass: $<HTMLInputElement>('#uPass'),
   role: $<HTMLSelectElement>('#uRole'),
   err: $('#uErr'),
+  submit: $<HTMLButtonElement>('#userForm button[type="submit"]'),
 };
 
 async function openUsers(): Promise<void> {
@@ -646,6 +649,10 @@ async function renderUsers(): Promise<void> {
 }
 uf.form.addEventListener('submit', async ev => {
   ev.preventDefault();
+  // Trava o botão enquanto envia: cliques repetidos criavam pedidos em paralelo
+  // (um criava o acesso e os outros voltavam "já existe", escondendo o sucesso).
+  if (uf.submit.disabled) return;
+  uf.submit.disabled = true;
   uf.err.hidden = true;
   try {
     await api.createUser({ nome: uf.name.value, email: uf.email.value, senha: uf.pass.value, perfil: uf.role.value === 'admin' ? 'admin' : 'user' });
@@ -655,6 +662,8 @@ uf.form.addEventListener('submit', async ev => {
   } catch (e) {
     uf.err.textContent = mensagemDoErro(e);
     uf.err.hidden = false;
+  } finally {
+    uf.submit.disabled = false;
   }
 });
 
