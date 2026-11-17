@@ -53,6 +53,8 @@ export interface Usuario {
   email: string;
   perfil: Perfil;
   ativo: boolean;
+  /** true até a pessoa trocar a senha provisória no primeiro acesso (a senha em si nunca é guardada). */
+  senhaProvisoria: boolean;
 }
 
 export interface Solicitacao {

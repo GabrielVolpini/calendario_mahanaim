@@ -3,7 +3,7 @@
 // =====================================================================
 import './styles.css';
 import { MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
-import { EventoInput, primeiraMensagem } from './domain/schemas';
+import { EventoInput, NovoUsuarioInput, TrocaSenhaInput, primeiraMensagem } from './domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA,
   type AnoMes, type Campanhas, type Categoria, type CorCampanha, type DataIso, type Escopo,
@@ -124,7 +124,9 @@ function showLogin(): void {
   ME = null;
   closeAll();
   $('#appScreen').hidden = true;
+  $('#pwdScreen').hidden = true;
   $('#loginScreen').hidden = false;
+  document.title = 'Calendário Mahanaim';
   lg.err.hidden = true;
   lg.pass.value = '';
   setTimeout(() => lg.email.focus(), 0);
@@ -155,6 +157,9 @@ $<HTMLElement>('#loginForm .demo').hidden = !MODO_DEMO;
 async function enterApp(): Promise<void> {
   if (!ME) return showLogin();
   $('#loginScreen').hidden = true;
+  // Primeiro acesso: troca obrigatória da senha provisória antes de liberar o app
+  if (ME.senhaProvisoria) return showPasswordChange();
+  $('#pwdScreen').hidden = true;
   $('#appScreen').hidden = false;
   const adm = isAdmin();
   $('#avatar').textContent = iniciais(ME.nome);
@@ -174,7 +179,84 @@ async function enterApp(): Promise<void> {
   buildLegend();
   try { await loadData(); } catch (e) { return falha(e); }
   render();
+  aplicarRota();
 }
+
+// =====================================================================
+// PRIMEIRO ACESSO: troca da senha provisória
+// =====================================================================
+const pw = {
+  form: $<HTMLFormElement>('#pwdForm'),
+  nova: $<HTMLInputElement>('#pwdNew'),
+  conf: $<HTMLInputElement>('#pwdConfirm'),
+  err: $('#pwdErr'),
+  submit: $<HTMLButtonElement>('#pwdSubmit'),
+};
+function showPasswordChange(): void {
+  closeAll();
+  $('#appScreen').hidden = true;
+  $('#loginScreen').hidden = true;
+  $('#pwdScreen').hidden = false;
+  $('#pwdName').textContent = ME?.nome.split(' ')[0] ?? '';
+  pw.form.reset();
+  pw.err.hidden = true;
+  setTimeout(() => pw.nova.focus(), 0);
+}
+pw.form.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if (pw.submit.disabled) return;
+  const mostrarErro = (m: string) => { pw.err.textContent = m; pw.err.hidden = false; };
+  pw.err.hidden = true;
+  const v = TrocaSenhaInput.safeParse({ senha: pw.nova.value, confirmacao: pw.conf.value });
+  if (!v.success) return mostrarErro(primeiraMensagem(v.error));
+  pw.submit.disabled = true;
+  try {
+    ME = await api.changePassword(v.data);
+    pw.form.reset();
+    await enterApp();
+    toast('Senha criada. Bem-vindo!');
+  } catch (e) {
+    mostrarErro(mensagemDoErro(e));
+    if (isApiError(e) && e.codigo === 'NAO_AUTENTICADO') showLogin();
+  } finally {
+    pw.submit.disabled = false;
+  }
+});
+$('#pwdLogout').addEventListener('click', async () => { await api.logout(); showLogin(); });
+
+// =====================================================================
+// ROTAS: "/" = calendário · "/users" = usuários (só admin)
+// =====================================================================
+const ROTA_USUARIOS = '/users';
+const naRotaUsuarios = () => location.pathname.replace(/\/+$/, '') === ROTA_USUARIOS;
+
+function navegar(caminho: string): void {
+  if (location.pathname !== caminho) history.pushState(null, '', caminho);
+  aplicarRota();
+}
+function aplicarRota(): void {
+  if (!ME || $('#appScreen').hidden) return;
+  let usuarios = naRotaUsuarios();
+  if (usuarios && !isAdmin()) {
+    history.replaceState(null, '', '/');
+    usuarios = false;
+    toast('A tela de usuários é só para administradores.', true);
+  }
+  closeAll();
+  $('#calPage').hidden = usuarios;
+  $('#usersPage').hidden = !usuarios;
+  $('#btnNew').hidden = usuarios;
+  const link = $('#btnUsers');
+  if (usuarios) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  document.title = usuarios ? 'Usuários · Calendário Mahanaim' : 'Calendário Mahanaim';
+  if (usuarios) void renderUsers();
+}
+window.addEventListener('popstate', aplicarRota);
+$$<HTMLAnchorElement>('#btnUsers, #uBack').forEach(a => a.addEventListener('click', e => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // abrir em nova aba continua funcionando
+  e.preventDefault();
+  navegar(a.getAttribute('href') ?? '/');
+}));
 
 // ---------- menu do usuário ----------
 const menu = $<HTMLDetailsElement>('#userMenu');
@@ -182,6 +264,7 @@ document.addEventListener('click', e => { if (menu.open && !menu.contains(e.targ
 $('#mLogout').addEventListener('click', async () => {
   menu.open = false;
   await api.logout();
+  history.replaceState(null, '', '/');
   showLogin();
   toast('Você saiu.');
 });
@@ -198,7 +281,6 @@ $('#mReset').addEventListener('click', async () => {
 });
 $('#btnNew').addEventListener('click', () => openForm(isAdmin() ? { mode: 'create', ev: { data: defaultDate() } } : { mode: 'request', ev: { data: defaultDate() } }));
 $('#btnRequests').addEventListener('click', () => openRequests());
-$('#btnUsers').addEventListener('click', () => { void openUsers(); });
 
 function defaultDate(): DataIso {
   const t = new Date();
@@ -495,7 +577,11 @@ f.form.addEventListener('submit', async ev => {
 // =====================================================================
 // CONFIRMAÇÃO GENÉRICA
 // =====================================================================
-interface AskOpts { title: string; msg?: string; ok: string; danger?: boolean; scope?: boolean; text?: string }
+interface AskOpts {
+  title: string; msg?: string; ok: string; danger?: boolean; scope?: boolean; text?: string;
+  /** Exige digitar exatamente este valor para liberar o botão (ex.: o e-mail de quem será excluído). */
+  confirm?: { label: string; valor: string };
+}
 interface AskResult { scope: Escopo; text: string }
 
 function ask(o: AskOpts): Promise<AskResult | null> {
@@ -503,6 +589,8 @@ function ask(o: AskOpts): Promise<AskResult | null> {
     const dlg = $<HTMLDialogElement>('#askDlg');
     const okBtn = $<HTMLButtonElement>('#askOk');
     const txt = $<HTMLTextAreaElement>('#askText');
+    const conf = $<HTMLInputElement>('#askConfirm');
+    const confere = () => !o.confirm || conf.value.trim().toLowerCase() === o.confirm.valor.toLowerCase();
     $('#askTitle').textContent = o.title;
     $('#askMsg').textContent = o.msg ?? '';
     okBtn.textContent = o.ok;
@@ -512,14 +600,21 @@ function ask(o: AskOpts): Promise<AskResult | null> {
     $('#askTextWrap').hidden = !o.text;
     txt.value = '';
     if (o.text) $('#askTextLabel').textContent = o.text;
-    $('#askBody').hidden = !o.scope && !o.text;
+    $('#askConfirmWrap').hidden = !o.confirm;
+    conf.value = '';
+    if (o.confirm) $('#askConfirmLabel').textContent = o.confirm.label;
+    okBtn.disabled = !confere();
+    conf.oninput = () => { okBtn.disabled = !confere(); };
+    $('#askBody').hidden = !o.scope && !o.text && !o.confirm;
     let done = false;
     const finish = (v: AskResult | null) => { if (done) return; done = true; dlg.close(); resolve(v); };
-    $<HTMLFormElement>('#askForm').onsubmit = e => { e.preventDefault(); finish({ scope: radioEscopo('askScope'), text: txt.value }); };
+    $<HTMLFormElement>('#askForm').onsubmit = e => { e.preventDefault(); if (confere()) finish({ scope: radioEscopo('askScope'), text: txt.value }); };
     $<HTMLButtonElement>('#askCancel').onclick = () => finish(null);
-    dlg.onclose = () => finish(null);
+    // O evento "close" chega depois (assíncrono): se o diálogo já foi reaberto por
+    // outra pergunta (ex.: 2º passo da exclusão), ele não pode cancelar a nova.
+    dlg.onclose = () => { if (!dlg.open) finish(null); };
     dlg.showModal();
-    setTimeout(() => (o.text ? txt : okBtn).focus(), 0);
+    setTimeout(() => (o.confirm ? conf : o.text ? txt : okBtn).focus(), 0);
   });
 }
 
@@ -604,9 +699,78 @@ function renderRequests(): void {
 }
 
 // =====================================================================
-// USUÁRIOS (admin)
+// USUÁRIOS (admin) — tela própria em /users
 // =====================================================================
-const usersDlg = $<HTMLDialogElement>('#usersDlg');
+let USERS: Usuario[] = [];
+
+async function renderUsers(): Promise<void> {
+  const box = $('#usersList');
+  try { USERS = await api.listUsers(); } catch (e) { falha(e); return; }
+  const aguardando = USERS.filter(u => u.senhaProvisoria).length;
+  $('#usersSub').textContent = `${USERS.length} ${USERS.length === 1 ? 'usuário' : 'usuários'}`
+    + (aguardando ? ` · ${aguardando} aguardando o primeiro acesso` : '')
+    + '. Admin cria, edita e aprova eventos. User vê o calendário e envia solicitações.';
+  if (!USERS.length) { setHtml(box, html`<tr><td colspan="5" class="empty">Nenhum usuário cadastrado.</td></tr>`); return; }
+  setHtml(box, html`${USERS.map(u => {
+    const eu = u.id === ME?.id;
+    return html`<tr class="${u.ativo ? '' : 'off'}">
+      <td class="nome">${u.nome}${eu ? raw(' <span class="badge">você</span>') : ''}${u.ativo ? '' : raw(' <span class="badge">desativado</span>')}</td>
+      <td class="mail">${u.email}</td>
+      <td data-label="Senha"><span class="senha"><span class="mask" aria-label="Senha oculta">••••••••</span>${u.senhaProvisoria
+        ? raw('<span class="badge pendente" title="A senha provisória ainda não foi trocada">Aguardando 1º acesso</span>')
+        : raw('<span class="badge aprovada" title="A pessoa já criou a própria senha">Já acessou</span>')}</span></td>
+      <td data-label="Perfil"><select data-role="${u.id}" aria-label="Perfil de ${u.nome}" ${eu ? raw('disabled') : ''}>
+        <option value="user" ${u.perfil === 'user' ? raw('selected') : ''}>User</option>
+        <option value="admin" ${u.perfil === 'admin' ? raw('selected') : ''}>Admin</option>
+      </select></td>
+      <td><div class="acts">
+        <button class="btn sm" data-toggle="${u.id}" ${eu ? raw('disabled') : ''}>${u.ativo ? 'Desativar' : 'Reativar'}</button>
+        <button class="btn sm danger" data-del="${u.id}" aria-label="Excluir ${u.nome}" ${eu ? raw('disabled title="Você não pode excluir o seu próprio acesso"') : ''}>Excluir</button>
+      </div></td>
+    </tr>`;
+  })}`);
+  const porId = (v: string | undefined) => USERS.find(x => x.id === v);
+  $$<HTMLSelectElement>('[data-role]', box).forEach(s => s.addEventListener('change', async () => {
+    const perfil = s.value === 'admin' ? 'admin' : 'user';
+    try { await api.updateUser({ id: s.dataset['role'] ?? '', perfil }); toast('Perfil atualizado.'); } catch (e) { falha(e); }
+    await renderUsers();
+  }));
+  $$<HTMLButtonElement>('[data-toggle]', box).forEach(b => b.addEventListener('click', async () => {
+    const u = porId(b.dataset['toggle']); if (!u) return;
+    b.disabled = true;
+    try { await api.updateUser({ id: u.id, ativo: !u.ativo }); toast(u.ativo ? 'Acesso desativado.' : 'Acesso reativado.'); } catch (e) { falha(e); }
+    await renderUsers();
+  }));
+  $$<HTMLButtonElement>('[data-del]', box).forEach(b => b.addEventListener('click', () => {
+    const u = porId(b.dataset['del']); if (u) void deleteUser(u);
+  }));
+}
+
+/** Exclusão com dupla validação: confirma e depois exige digitar o e-mail. */
+async function deleteUser(u: Usuario): Promise<void> {
+  const passo1 = await ask({
+    title: `Excluir ${u.nome}?`,
+    msg: `${u.email} perde o acesso de vez e as solicitações enviadas por essa pessoa são apagadas. Eventos já publicados continuam no calendário. Se a ideia é só bloquear por um tempo, use "Desativar".`,
+    ok: 'Continuar', danger: true,
+  });
+  if (!passo1) return;
+  const passo2 = await ask({
+    title: 'Confirme a exclusão',
+    msg: 'Esta ação não pode ser desfeita.',
+    ok: 'Excluir definitivamente', danger: true,
+    confirm: { label: `Digite o e-mail ${u.email} para confirmar`, valor: u.email },
+  });
+  if (!passo2) return;
+  try {
+    await api.deleteUser(u.id);
+    toast(`Acesso de ${u.nome} excluído.`);
+  } catch (e) { falha(e); }
+  await renderUsers();
+  void refresh(); // pedidos da pessoa saem da fila e do calendário
+}
+
+// ---------- popup de criação ----------
+const userDlg = $<HTMLDialogElement>('#userDlg');
 const uf = {
   form: $<HTMLFormElement>('#userForm'),
   name: $<HTMLInputElement>('#uName'),
@@ -614,58 +778,73 @@ const uf = {
   pass: $<HTMLInputElement>('#uPass'),
   role: $<HTMLSelectElement>('#uRole'),
   err: $('#uErr'),
-  submit: $<HTMLButtonElement>('#userForm button[type="submit"]'),
+  submit: $<HTMLButtonElement>('#uSubmit'),
 };
 
-async function openUsers(): Promise<void> {
-  try { await renderUsers(); } catch (e) { return falha(e); }
-  uf.err.hidden = true;
+/** Senha provisória aleatória: 10 caracteres sem os confusos (0/O, 1/l/I), com letra e número. */
+function gerarSenha(): string {
+  const letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ', numeros = '23456789', todos = letras + numeros;
+  const r = crypto.getRandomValues(new Uint32Array(10));
+  const c = Array.from(r, (n, i) => (i === 0 ? letras : i === 1 ? numeros : todos)[n % (i === 0 ? letras.length : i === 1 ? numeros.length : todos.length)]);
+  // embaralha para a letra e o número não ficarem sempre no começo
+  const m = crypto.getRandomValues(new Uint32Array(c.length));
+  for (let i = c.length - 1; i > 0; i--) { const j = (m[i] ?? 0) % (i + 1); [c[i], c[j]] = [c[j], c[i]]; }
+  return c.join('');
+}
+
+function openNewUser(): void {
   uf.form.reset();
-  usersDlg.showModal();
+  uf.err.hidden = true;
+  uf.pass.value = gerarSenha();
+  userDlg.showModal();
+  setTimeout(() => uf.name.focus(), 0);
 }
-async function renderUsers(): Promise<void> {
-  const users = await api.listUsers(), box = $('#usersList');
-  setHtml(box, html`${users.map(u => {
-    const eu = u.id === ME?.id;
-    return html`<div class="user-row${u.ativo ? '' : ' off'}">
-      <div><b>${u.nome}${eu ? raw(' <span class="badge">você</span>') : ''}${u.ativo ? '' : raw(' <span class="badge">desativado</span>')}</b><small>${u.email}</small></div>
-      <select data-role="${u.id}" aria-label="Perfil de ${u.nome}" ${eu ? raw('disabled') : ''}>
-        <option value="user" ${u.perfil === 'user' ? raw('selected') : ''}>User</option>
-        <option value="admin" ${u.perfil === 'admin' ? raw('selected') : ''}>Admin</option>
-      </select>
-      <button class="btn sm ${u.ativo ? 'danger' : ''}" data-toggle="${u.id}" ${eu ? raw('disabled') : ''}>${u.ativo ? 'Desativar' : 'Reativar'}</button>
-    </div>`;
-  })}`);
-  $$<HTMLSelectElement>('[data-role]', box).forEach(s => s.addEventListener('change', async () => {
-    const perfil = s.value === 'admin' ? 'admin' : 'user';
-    try { await api.updateUser({ id: s.dataset['role'] ?? '', perfil }); toast('Perfil atualizado.'); } catch (e) { falha(e); }
-    await renderUsers();
-  }));
-  $$<HTMLButtonElement>('[data-toggle]', box).forEach(b => b.addEventListener('click', async () => {
-    const u = users.find(x => x.id === b.dataset['toggle']); if (!u) return;
-    try { await api.updateUser({ id: u.id, ativo: !u.ativo }); toast(u.ativo ? 'Acesso desativado.' : 'Acesso reativado.'); } catch (e) { falha(e); }
-    await renderUsers();
-  }));
-}
+$('#uNew').addEventListener('click', openNewUser);
+$('#uGen').addEventListener('click', () => { uf.pass.value = gerarSenha(); uf.pass.focus(); });
+
 uf.form.addEventListener('submit', async ev => {
   ev.preventDefault();
   // Trava o botão enquanto envia: cliques repetidos criavam pedidos em paralelo
   // (um criava o acesso e os outros voltavam "já existe", escondendo o sucesso).
   if (uf.submit.disabled) return;
-  uf.submit.disabled = true;
   uf.err.hidden = true;
+  const dados = { nome: uf.name.value, email: uf.email.value, senha: uf.pass.value, perfil: uf.role.value === 'admin' ? 'admin' as const : 'user' as const };
+  const v = NovoUsuarioInput.safeParse(dados);
+  if (!v.success) { uf.err.textContent = primeiraMensagem(v.error); uf.err.hidden = false; return; }
+  uf.submit.disabled = true;
   try {
-    await api.createUser({ nome: uf.name.value, email: uf.email.value, senha: uf.pass.value, perfil: uf.role.value === 'admin' ? 'admin' : 'user' });
+    const novo = await api.createUser(v.data);
+    userDlg.close();
     uf.form.reset();
+    showCredentials(novo, v.data.senha);
     await renderUsers();
-    toast('Acesso criado.');
   } catch (e) {
     uf.err.textContent = mensagemDoErro(e);
     uf.err.hidden = false;
+    if (isApiError(e) && e.codigo === 'NAO_AUTENTICADO') showLogin();
   } finally {
     uf.submit.disabled = false;
   }
 });
+
+// ---------- acesso criado: a senha aparece só aqui ----------
+const credDlg = $<HTMLDialogElement>('#credDlg');
+function showCredentials(u: Usuario, senha: string): void {
+  $('#credSub').textContent = `${u.nome} · ${u.perfil === 'admin' ? 'Admin' : 'User'}`;
+  $('#credEmail').textContent = u.email;
+  $('#credPass').textContent = senha;
+  const copiar = $<HTMLButtonElement>('#credCopy');
+  copiar.textContent = 'Copiar acesso';
+  copiar.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(`Calendário Mahanaim\nE-mail: ${u.email}\nSenha provisória: ${senha}\nNo primeiro acesso você vai criar uma senha nova.`);
+      copiar.textContent = 'Copiado ✓';
+    } catch { toast('Não foi possível copiar. Selecione e copie manualmente.', true); }
+  };
+  credDlg.showModal();
+}
+// Ao fechar, a senha some da tela (não fica em lugar nenhum)
+credDlg.addEventListener('close', () => { $('#credPass').textContent = ''; $('#credEmail').textContent = ''; });
 
 // =====================================================================
 // CAMPANHA DO MÊS (admin)
@@ -724,7 +903,7 @@ $$<HTMLDialogElement>('dialog').forEach(d => {
 function closeAll(): void { $$<HTMLDialogElement>('dialog[open]').forEach(d => d.close()); }
 document.addEventListener('keydown', e => {
   const alvo = e.target as HTMLElement;
-  if (document.querySelector('dialog[open]') || $('#appScreen').hidden || /INPUT|TEXTAREA|SELECT/.test(alvo.tagName)) return;
+  if (document.querySelector('dialog[open]') || $('#appScreen').hidden || $('#calPage').hidden || /INPUT|TEXTAREA|SELECT/.test(alvo.tagName)) return;
   if (e.key === 'ArrowLeft') step(-1);
   if (e.key === 'ArrowRight') step(1);
 });

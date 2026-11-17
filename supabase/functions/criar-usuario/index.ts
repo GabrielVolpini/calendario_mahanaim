@@ -5,7 +5,8 @@
 //   1) confere que quem chamou está logado e é admin ativo;
 //   2) valida os dados;
 //   3) cria o usuário no Supabase Auth (a senha vira hash lá);
-//   4) define o perfil (admin/user) na tabela perfis.
+//   4) define o perfil (admin/user) na tabela perfis (senha_provisoria = true:
+//      a pessoa troca a senha no primeiro acesso).
 // =====================================================================
 import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 
@@ -66,7 +67,7 @@ Deno.serve(async req => {
   // 4) Perfil
   const { data: p, error: erroPerfil } = await admin
     .from('perfis').update({ nome, perfil }).eq('id', criado.user.id)
-    .select('id, nome, email, perfil, ativo').single();
+    .select('id, nome, email, perfil, ativo, senha_provisoria').single();
   if (erroPerfil) {
     // Desfaz a criação: não deixar um acesso "pela metade" (ex.: sem o perfil admin pedido)
     console.error('criar-usuario: falha ao salvar perfil', erroPerfil.message);

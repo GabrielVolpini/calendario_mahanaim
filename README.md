@@ -32,8 +32,12 @@ O primeiro admin é criado no painel (Authentication → Users → Add user) e p
 update public.perfis set perfil = 'admin' where email = 'seu-email@exemplo.com';
 ```
 
-Os próximos acessos o admin cria pela própria tela de Usuários
-(Edge Function `criar-usuario`).
+Os próximos acessos o admin cria pela tela de **Usuários** (`/users`),
+que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
+
+> **Hospedagem:** a tela de usuários tem rota própria (`/users`). No `npm run dev` isso já funciona;
+> ao publicar o `dist/`, configure o servidor para devolver o `index.html` em qualquer caminho
+> (ex.: *rewrite* `/* → /index.html` na Vercel/Netlify).
 
 | Comando | O que faz |
 |---|---|
@@ -60,6 +64,15 @@ No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
   e acompanha em *Minhas solicitações*. O pedido aparece tracejado só para o autor e os admins.
 - **Admin**: cria, edita e exclui eventos (inclusive de vários dias e séries de cultos),
   aprova, ajusta ou recusa solicitações, gerencia usuários e a campanha do mês.
+- **Tela de Usuários** (`/users`, só Admin; o botão nem aparece para User):
+  - lista nome, e-mail, situação da senha provisória e perfil de cada pessoa;
+  - **+ Novo usuário** (canto superior esquerdo) abre o pop-up de criação, com gerador de senha provisória.
+    A senha aparece **uma única vez**, com botão *Copiar acesso*, e **não fica salva** em lugar nenhum
+    (o Supabase guarda só o hash). Na lista ela aparece como `••••••••` + "Aguardando 1º acesso" ou "Já acessou";
+  - trocar perfil, desativar/reativar e **excluir** (dupla validação: confirmar e depois digitar o e-mail
+    da pessoa). Excluir apaga o acesso do Supabase Auth; ninguém exclui o próprio acesso.
+- **Primeiro acesso**: quem entra com senha provisória vê a tela *Crie sua senha* (nova senha + confirmação)
+  antes de liberar o calendário.
 
 ## Estrutura
 
@@ -75,7 +88,7 @@ src/api/supabase.ts     implementação real (Supabase) + conversões app ↔ ba
 src/api/database.types.ts  tipos gerados a partir do banco
 src/api/index.ts        escolhe a implementação (Supabase se houver .env.local)
 supabase/migrations/    estrutura, carga inicial, ajustes e permissões do banco
-supabase/functions/     Edge Function criar-usuario (usa a chave de serviço no servidor)
+supabase/functions/     Edge Functions criar-usuario e excluir-usuario (usam a chave de serviço no servidor)
 scripts/gerar-carga-inicial.ts  gera a migração de carga a partir de src/data/seed.ts
 src/api/errors.ts       erros com código (NAO_AUTENTICADO, SEM_PERMISSAO...)
 src/data/seed.ts        dados iniciais (vira a carga inicial do banco)
@@ -107,9 +120,14 @@ src/ui/format.ts        datas e horários
 - **Carga inicial**: cultos (11 séries), eventos especiais, aniversários, datas comemorativas e
   campanhas do protótipo foram migrados (`..._carga_inicial.sql`). Feriados são gerados pelo banco
   com `gerar_feriados(ano)`. Usuários e solicitações de demonstração **não** foram migrados.
-- **Permissões**: GRANT só para usuários logados + RLS (todos leem; só admin grava).
+- **Permissões**: GRANT só para usuários logados + RLS (quem tem perfil **ativo** lê; só admin ativo grava).
+  Usuário desativado não lê nem grava nada, mesmo chamando a API direto com um token ainda válido
+  (helper `is_ativo()`); ele só enxerga o próprio perfil, para o app mostrar o aviso de acesso desativado.
   Usuário comum cria/cancela pedidos pelas funções `solicitar_evento` e `cancelar_solicitacao`.
 - Categorias da tela ↔ tipos do banco: `evento` = `especial`/`conferencia`/`reuniao`,
   `aniv` = `aniversario`, `data` = `data_comemorativa`.
-- Pendências: "Esqueci a senha" por e-mail; sessão de 30 dias configurada no painel do Auth;
-  bloquear no RLS usuários marcados como inativos.
+- **Senha provisória**: `perfis.senha_provisoria` nasce `true` em todo acesso novo; só a própria pessoa
+  a desmarca, pela função `concluir_troca_senha` (um gatilho impede o admin de mudar isso pela API).
+- **Exclusão de usuário**: apagar do Auth apaga o perfil (`on delete cascade`) e as solicitações da pessoa;
+  eventos criados por ela continuam no calendário, sem autor.
+- Pendências: "Esqueci a senha" por e-mail; sessão de 30 dias configurada no painel do Auth.

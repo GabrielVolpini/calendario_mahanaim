@@ -134,9 +134,9 @@ export function criarBancoDemo(): Banco {
     },
     // Senhas de demonstração (só no protótipo!)
     users: [
-      { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true },
-      { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true },
-      { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true },
+      { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true, senhaProvisoria: false },
+      { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true, senhaProvisoria: false },
+      { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true, senhaProvisoria: false },
     ],
     requests: [
       { id: 'r1', status: 'pendente', autorId: 'u2', criadoEm: '2026-11-14T10:20:00',

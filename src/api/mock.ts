@@ -10,7 +10,7 @@ import { limpo, validar } from './comum';
 import { criarBancoDemo, type Banco, type UsuarioDemo } from '../data/seed';
 import {
   AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
-  NovoUsuarioInput, SolicitacaoInput, anoMes, id as idSchema,
+  NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA, ESCOPOS, PERFIS, STATUS_SOLICITACAO,
@@ -39,6 +39,7 @@ const BancoSalvo = z.object({
   campanhas: z.record(z.string(), z.object({ n: z.string(), s: z.string(), c: z.enum(CORES_CAMPANHA) })),
   users: z.array(z.object({
     id: z.string(), nome: z.string(), email: z.string(), senha: z.string(), perfil: z.enum(PERFIS), ativo: z.boolean(),
+    senhaProvisoria: z.boolean().default(false), // dados salvos antes deste campo existir
   })),
   requests: z.array(z.object({
     id: z.string(), status: z.enum(STATUS_SOLICITACAO), autorId: z.string(), criadoEm: z.string(),
@@ -66,7 +67,9 @@ function carregar(): Banco {
 const clone = <T>(o: T): T => structuredClone(o);
 const agora = () => new Date().toISOString().slice(0, 19);
 const responder = <T>(v: T): Promise<T> => new Promise(r => setTimeout(() => r(clone(v)), 60));
-const publico = (u: UsuarioDemo): Usuario => ({ id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo });
+const publico = (u: UsuarioDemo): Usuario => ({
+  id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo, senhaProvisoria: u.senhaProvisoria,
+});
 
 export function createMockApi(): CalendarApi {
   let db = carregar();
@@ -135,6 +138,15 @@ export function createMockApi(): CalendarApi {
     async me() {
       const u = usuarioAtual();
       return responder(u ? publico(u) : null);
+    },
+    async changePassword(dados) {
+      const u = exigirUsuario();
+      const d = validar(TrocaSenhaInput, dados);
+      if (d.senha === u.senha) throw new ApiError('VALIDACAO', 'A nova senha precisa ser diferente da senha provisória.');
+      u.senha = d.senha;
+      u.senhaProvisoria = false;
+      salvar();
+      return responder(publico(u));
     },
 
     // -------- Eventos --------
@@ -240,7 +252,7 @@ export function createMockApi(): CalendarApi {
       exigirAdmin();
       const d = validar(NovoUsuarioInput, dados);
       if (db.users.some(u => u.email === d.email)) throw new ApiError('CONFLITO', 'Já existe um acesso com este e-mail.');
-      const u: UsuarioDemo = { id: novoId('u'), ...d, ativo: true };
+      const u: UsuarioDemo = { id: novoId('u'), ...d, ativo: true, senhaProvisoria: true };
       db.users.push(u); salvar();
       return responder(publico(u));
     },
@@ -255,6 +267,18 @@ export function createMockApi(): CalendarApi {
       if (d.ativo !== undefined) u.ativo = d.ativo;
       salvar();
       return responder(publico(u));
+    },
+
+    async deleteUser(id) {
+      const admin = exigirAdmin();
+      const alvo = validar(idSchema, id);
+      if (alvo === admin.id) throw new ApiError('CONFLITO', 'Você não pode excluir o seu próprio acesso.');
+      if (!db.users.some(u => u.id === alvo)) throw new ApiError('NAO_ENCONTRADO', 'Usuário não encontrado.');
+      // Igual ao banco: o acesso e os pedidos dele somem; eventos publicados ficam.
+      db.users = db.users.filter(u => u.id !== alvo);
+      db.requests = db.requests.filter(r => r.autorId !== alvo);
+      salvar();
+      return responder(undefined);
     },
 
     // -------- Somente no protótipo --------

@@ -72,15 +72,15 @@ export type Database = {
       perfis: {
         Row: {
           ativo: boolean; atualizado_em: string; criado_em: string; email: string; id: string; nome: string;
-          perfil: Database['public']['Enums']['perfil_usuario'];
+          perfil: Database['public']['Enums']['perfil_usuario']; senha_provisoria: boolean;
         };
         Insert: {
           ativo?: boolean; atualizado_em?: string; criado_em?: string; email: string; id: string; nome: string;
-          perfil?: Database['public']['Enums']['perfil_usuario'];
+          perfil?: Database['public']['Enums']['perfil_usuario']; senha_provisoria?: boolean;
         };
         Update: {
           ativo?: boolean; atualizado_em?: string; criado_em?: string; email?: string; id?: string; nome?: string;
-          perfil?: Database['public']['Enums']['perfil_usuario'];
+          perfil?: Database['public']['Enums']['perfil_usuario']; senha_provisoria?: boolean;
         };
         Relationships: [];
       };
@@ -134,6 +134,7 @@ export type Database = {
     Functions: {
       aprovar_solicitacao: { Args: { p_id: string }; Returns: undefined };
       cancelar_solicitacao: { Args: { p_id: string }; Returns: undefined };
+      concluir_troca_senha: { Args: never; Returns: undefined };
       data_pascoa: { Args: { ano: number }; Returns: string };
       gerar_feriados: { Args: { p_ano: number }; Returns: number };
       is_admin: { Args: never; Returns: boolean };

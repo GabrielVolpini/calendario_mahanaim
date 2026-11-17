@@ -116,6 +116,13 @@ export const AtualizarUsuarioInput = z.strictObject({
 });
 export type AtualizarUsuarioInput = z.input<typeof AtualizarUsuarioInput>;
 
+/** Troca da senha provisória no primeiro acesso: nova senha + confirmação. */
+export const TrocaSenhaInput = z.strictObject({
+  senha: senhaNova,
+  confirmacao: z.string().max(72, 'Senha inválida.'),
+}).refine(d => d.senha === d.confirmacao, { message: 'A confirmação não é igual à nova senha.', path: ['confirmacao'] });
+export type TrocaSenhaInput = z.input<typeof TrocaSenhaInput>;
+
 export const CampanhaInput = z.strictObject({
   n: texto('o nome da campanha', 40),
   s: z.preprocess(v => v ?? '', z.string().trim().max(80, 'Descrição: máximo de 80 caracteres.').regex(SEGURO, MSG_INSEGURO)),

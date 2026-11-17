@@ -19,7 +19,7 @@ import { ApiError } from './errors';
 import { limpo, validar } from './comum';
 import {
   AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
-  NovoUsuarioInput, SolicitacaoInput, anoMes, id as idSchema,
+  NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
   CORES_CAMPANHA, ESCOPOS,
@@ -118,6 +118,12 @@ function exigir<R extends Resposta>(r: R): NonNullable<R['data']> {
   return d as NonNullable<R['data']>;
 }
 
+const COLUNAS_PERFIL = 'id, nome, email, perfil, ativo, senha_provisoria' as const;
+type LinhaPerfil = Pick<Database['public']['Tables']['perfis']['Row'], 'id' | 'nome' | 'email' | 'perfil' | 'ativo' | 'senha_provisoria'>;
+const paraUsuario = (r: LinhaPerfil): Usuario => ({
+  id: r.id, nome: r.nome, email: r.email, perfil: r.perfil, ativo: r.ativo, senhaProvisoria: r.senha_provisoria,
+});
+
 const COLUNAS_EVENTO = 'id, titulo, tipo, data_inicio, data_fim, hora_inicio, observacao, serie_id, local_id, locais(nome)' as const;
 const PAGINA = 1000; // limite padrão de linhas por requisição no Supabase
 
@@ -130,15 +136,31 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
   async function perfilAtual(): Promise<Usuario | null> {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return null;
-    const { data, error } = await sb.from('perfis').select('id, nome, email, perfil, ativo').eq('id', session.user.id).maybeSingle();
+    const { data, error } = await sb.from('perfis').select(COLUNAS_PERFIL).eq('id', session.user.id).maybeSingle();
     if (error || !data) return null;
     if (!data.ativo) { await sb.auth.signOut(); return null; }
-    return data;
+    return paraUsuario(data);
   }
   async function exigirUsuario(): Promise<Usuario> {
     const u = await perfilAtual();
     if (!u) throw new ApiError('NAO_AUTENTICADO', 'Sua sessão expirou. Entre novamente.');
     return u;
+  }
+
+  /**
+   * Chama uma Edge Function (operações que exigem a chave de serviço, que fica no servidor).
+   * As funções respondem { codigo, erro } quando algo dá errado.
+   */
+  async function funcao<T>(nome: string, corpo: object, falhaPadrao: string): Promise<T> {
+    const { data, error } = await sb.functions.invoke<T>(nome, { body: corpo });
+    if (error) {
+      const resp = await (error as { context?: Response }).context?.json?.().catch(() => null) as { codigo?: string; erro?: string } | null;
+      const conhecidos = ['CONFLITO', 'SEM_PERMISSAO', 'NAO_AUTENTICADO', 'NAO_ENCONTRADO'] as const;
+      const codigo = conhecidos.find(c => c === resp?.codigo) ?? 'VALIDACAO';
+      throw new ApiError(codigo, resp?.erro ?? falhaPadrao);
+    }
+    if (!data) throw new ApiError('VALIDACAO', falhaPadrao);
+    return data;
   }
 
   // ---------- locais (cache: mudam raramente) ----------
@@ -226,6 +248,18 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
       locais = null;
     },
     async me() { return perfilAtual(); },
+    async changePassword(dados) {
+      await exigirUsuario();
+      const d = validar(TrocaSenhaInput, dados);
+      const { error } = await sb.auth.updateUser({ password: d.senha });
+      if (error) {
+        if (error.code === 'same_password') throw new ApiError('VALIDACAO', 'A nova senha precisa ser diferente da senha provisória.');
+        if (error.code === 'weak_password') throw new ApiError('VALIDACAO', 'Senha muito fraca. Use uma senha mais longa e menos óbvia.');
+        throw erroAuth(error);
+      }
+      ok(await sb.rpc('concluir_troca_senha'));
+      return exigirUsuario();
+    },
 
     // -------- Eventos --------
     async listEvents() {
@@ -333,20 +367,14 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
     // -------- Usuários --------
     async listUsers() {
       await exigirUsuario();
-      return exigir(await sb.from('perfis').select('id, nome, email, perfil, ativo').order('nome'));
+      return exigir(await sb.from('perfis').select(COLUNAS_PERFIL).order('nome')).map(paraUsuario);
     },
     async createUser(dados) {
       await exigirUsuario();
       const d = validar(NovoUsuarioInput, dados);
       // Criar acesso exige a chave de serviço → feito na Edge Function "criar-usuario"
-      const { data, error } = await sb.functions.invoke<{ usuario: Usuario }>('criar-usuario', { body: d });
-      if (error) {
-        const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null) as { codigo?: string; erro?: string } | null;
-        const codigo = corpo?.codigo === 'CONFLITO' || corpo?.codigo === 'SEM_PERMISSAO' || corpo?.codigo === 'NAO_AUTENTICADO' ? corpo.codigo : 'VALIDACAO';
-        throw new ApiError(codigo, corpo?.erro ?? 'Não foi possível criar o acesso.');
-      }
-      if (!data) throw new ApiError('VALIDACAO', 'Não foi possível criar o acesso.');
-      return data.usuario;
+      const r = await funcao<{ usuario: LinhaPerfil }>('criar-usuario', d, 'Não foi possível criar o acesso.');
+      return paraUsuario(r.usuario);
     },
     async updateUser(dados) {
       await exigirUsuario();
@@ -354,9 +382,16 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
       const mudar: { perfil?: 'admin' | 'user'; ativo?: boolean } = {};
       if (d.perfil) mudar.perfil = d.perfil;
       if (d.ativo !== undefined) mudar.ativo = d.ativo;
-      const u = ok(await sb.from('perfis').update(mudar).eq('id', d.id).select('id, nome, email, perfil, ativo').maybeSingle());
+      const u = ok(await sb.from('perfis').update(mudar).eq('id', d.id).select(COLUNAS_PERFIL).maybeSingle());
       if (!u) throw new ApiError('NAO_ENCONTRADO', 'Usuário não encontrado.');
-      return u;
+      return paraUsuario(u);
+    },
+    async deleteUser(id) {
+      const u = await exigirUsuario();
+      const alvo = validar(idSchema, id);
+      if (alvo === u.id) throw new ApiError('CONFLITO', 'Você não pode excluir o seu próprio acesso.');
+      // Apagar do Auth exige a chave de serviço → Edge Function "excluir-usuario"
+      await funcao<{ ok: true }>('excluir-usuario', { id: alvo }, 'Não foi possível excluir o acesso.');
     },
 
     // -------- Só existe no protótipo --------
