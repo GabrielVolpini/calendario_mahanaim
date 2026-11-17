@@ -22,7 +22,11 @@ Depois acesse http://127.0.0.1:5173.
 ### Conectar ao Supabase
 
 Copie `.env.example` para `.env.local` e preencha a URL e a chave **publishable**
-(Painel → Project Settings → API Keys). Com isso o app usa o banco real; sem isso, o modo protótipo.
+(Painel → Project Settings → API Keys). Com isso o app usa o banco real; sem isso, o `npm run dev` abre o modo protótipo.
+
+Na **Vercel**, cadastre as mesmas duas variáveis em Project Settings → Environment Variables
+e faça um novo deploy. Sem elas, o site publicado não abre o protótipo: a tela de login avisa
+que falta a configuração do banco.
 A chave publishable pode ir para o navegador: quem protege os dados é o RLS do banco.
 **Nunca** coloque a chave `service_role`/secret no `.env.local`.
 
@@ -46,7 +50,9 @@ que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
 | `npm run build` | confere os tipos e gera o site final em `dist/` |
 | `npm run preview` | abre o site gerado em `dist/` |
 
-### Acessos de demonstração (só no modo protótipo)
+### Acessos de demonstração (só no modo protótipo, em `npm run dev` sem `.env.local`)
+
+Digite-os na tela de login:
 
 | Perfil | E-mail | Senha |
 |---|---|---|
