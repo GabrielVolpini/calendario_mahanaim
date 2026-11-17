@@ -67,7 +67,12 @@ Deno.serve(async req => {
   const { data: p, error: erroPerfil } = await admin
     .from('perfis').update({ nome, perfil }).eq('id', criado.user.id)
     .select('id, nome, email, perfil, ativo').single();
-  if (erroPerfil) return responder(500, { codigo: 'VALIDACAO', erro: 'Acesso criado, mas o perfil não pôde ser salvo.' });
+  if (erroPerfil) {
+    // Desfaz a criação: não deixar um acesso "pela metade" (ex.: sem o perfil admin pedido)
+    console.error('criar-usuario: falha ao salvar perfil', erroPerfil.message);
+    await admin.auth.admin.deleteUser(criado.user.id);
+    return responder(500, { codigo: 'VALIDACAO', erro: 'Não foi possível salvar o perfil. O acesso não foi criado; tente de novo.' });
+  }
 
   return responder(200, { usuario: p });
 });

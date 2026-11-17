@@ -614,6 +614,7 @@ const uf = {
   pass: $<HTMLInputElement>('#uPass'),
   role: $<HTMLSelectElement>('#uRole'),
   err: $('#uErr'),
+  submit: $<HTMLButtonElement>('#userForm button[type="submit"]'),
 };
 
 async function openUsers(): Promise<void> {
@@ -648,6 +649,10 @@ async function renderUsers(): Promise<void> {
 }
 uf.form.addEventListener('submit', async ev => {
   ev.preventDefault();
+  // Trava o botão enquanto envia: cliques repetidos criavam pedidos em paralelo
+  // (um criava o acesso e os outros voltavam "já existe", escondendo o sucesso).
+  if (uf.submit.disabled) return;
+  uf.submit.disabled = true;
   uf.err.hidden = true;
   try {
     await api.createUser({ nome: uf.name.value, email: uf.email.value, senha: uf.pass.value, perfil: uf.role.value === 'admin' ? 'admin' : 'user' });
@@ -657,6 +662,8 @@ uf.form.addEventListener('submit', async ev => {
   } catch (e) {
     uf.err.textContent = mensagemDoErro(e);
     uf.err.hidden = false;
+  } finally {
+    uf.submit.disabled = false;
   }
 });
 
