@@ -13,7 +13,7 @@ import {
   NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
-  CATEGORIAS, CORES_CAMPANHA, ESCOPOS, PERFIS, STATUS_SOLICITACAO,
+  CATEGORIAS, CORES_CAMPANHA, ESCOPOS, ESPACOS, NOME_UNIDADE, PERFIS, STATUS_SOLICITACAO, UNIDADES,
   type Escopo, type Evento, type Usuario,
 } from '../domain/types';
 
@@ -32,7 +32,7 @@ const apagar = (a: Area, k: string): void => { try { window[a].removeItem(k); } 
 // ---------- validação do que vem do armazenamento (não confiar cegamente) ----------
 const opt = z.string().optional();
 const EventoSalvo = z.object({
-  id: z.string(), data: z.string(), c: z.enum(CATEGORIAS), n: z.string(), t: opt, l: opt, fim: opt, serie: opt,
+  id: z.string(), data: z.string(), c: z.enum(CATEGORIAS), n: z.string(), t: opt, l: opt, un: z.enum(UNIDADES).optional(), esp: z.enum(ESPACOS).optional(), fim: opt, serie: opt,
 });
 const BancoSalvo = z.object({
   events: z.array(EventoSalvo),
@@ -56,11 +56,21 @@ function carregar(): Banco {
   if (raw) {
     try {
       const r = BancoSalvo.safeParse(JSON.parse(raw));
-      if (r.success) return r.data;
+      if (r.success) return migrarLocais(r.data);
       console.warn('Dados locais inválidos; voltando aos dados de exemplo.', r.error.issues[0]);
     } catch { /* JSON corrompido */ }
   }
   return criarBancoDemo();
+}
+
+/** Dados guardados antes do campo "local": "Santo André"/"Ribeirão Pires" estavam na observação. */
+function migrarLocais(db: Banco): Banco {
+  const porNome = new Map(UNIDADES.map(u => [NOME_UNIDADE[u], u] as const));
+  for (const e of [...db.events, ...db.requests.map(r => r.evento)]) {
+    const un = e.l ? porNome.get(e.l) : undefined;
+    if (un && !e.un) { e.un = un; delete e.l; }
+  }
+  return db;
 }
 
 // ---------- utilidades ----------
@@ -170,6 +180,8 @@ export function createMockApi(): CalendarApi {
           x.c = d.c; x.n = d.n;
           if (d.t) x.t = d.t; else delete x.t;
           if (d.l) x.l = d.l; else delete x.l;
+          if (d.un) x.un = d.un; else delete x.un;
+          if (d.esp) x.esp = d.esp; else delete x.esp;
         }
         salvar();
         return responder(atual);
@@ -200,6 +212,8 @@ export function createMockApi(): CalendarApi {
     },
     async createRequest(evento, mensagem) {
       const u = exigirUsuario();
+      // Admin publica direto (createEvent); solicitação é só para User
+      if (u.perfil === 'admin') throw new ApiError('VALIDACAO', 'Quem é admin cria o evento direto no calendário, sem passar por aprovação.');
       const d = validar(SolicitacaoInput, { evento, mensagem });
       const pendentes = db.requests.filter(r => r.autorId === u.id && r.status === 'pendente').length;
       if (pendentes >= 10) throw new ApiError('CONFLITO', 'Você já tem 10 solicitações pendentes. Aguarde a liderança responder.');

@@ -16,6 +16,8 @@ export function limpo(e: EventoInput): EventoDados {
   const out: EventoDados = { data: e.data, c: e.c, n: e.n };
   if (e.t) out.t = e.t;
   if (e.l) out.l = e.l;
+  if (e.un) out.un = e.un;
+  if (e.esp) out.esp = e.esp;
   if (e.fim) out.fim = e.fim;
   return out;
 }

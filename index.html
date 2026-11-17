@@ -152,7 +152,11 @@
       </div>
       <label class="check"><input type="checkbox" id="fMulti"> Dura vários dias</label>
       <label class="field" id="fEndWrap" hidden><span>Data final</span><input type="date" id="fEnd"></label>
-      <label class="field"><span>Local ou observação <small>(opcional)</small></span><input id="fLoc" maxlength="80" placeholder="Ex.: Santo André, No culto"></label>
+      <div class="row2">
+        <label class="field"><span>Local <small>(opcional)</small></span><select id="fUn"></select></label>
+        <label class="field" id="fEspWrap" hidden><span>Espaço <small>(opcional)</small></span><select id="fEsp"></select></label>
+      </div>
+      <label class="field"><span>Observação <small>(opcional)</small></span><input id="fLoc" maxlength="80" placeholder="Ex.: No culto, Data a confirmar"></label>
       <fieldset id="fScope" hidden>
         <legend>Este item se repete. Aplicar a:</legend>
         <label class="check"><input type="radio" name="scope" value="um" checked> Somente este dia</label>

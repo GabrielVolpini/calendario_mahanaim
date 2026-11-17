@@ -21,6 +21,34 @@ export type CorCampanha = (typeof CORES_CAMPANHA)[number];
 export const ESCOPOS = ['um', 'proximos'] as const;
 export type Escopo = (typeof ESCOPOS)[number];
 
+/** Local do evento: uma das unidades da igreja ou fora dela. */
+export const UNIDADES = ['santo-andre', 'ribeirao-pires', 'externo'] as const;
+export type Unidade = (typeof UNIDADES)[number];
+/** Nome na tela. No banco, é o nome cadastrado na tabela locais. */
+export const NOME_UNIDADE: Record<Unidade, string> = {
+  'santo-andre': 'Santo André',
+  'ribeirao-pires': 'Ribeirão Pires',
+  externo: 'Evento externo',
+};
+
+/** Espaço dentro da unidade (templo ou sala). */
+export const ESPACOS = ['templo', 'ebenezer', 'sementes', 'betel', 'mahanadance', 'pastoral'] as const;
+export type Espaco = (typeof ESPACOS)[number];
+export const NOME_ESPACO: Record<Espaco, string> = {
+  templo: 'Templo',
+  ebenezer: 'Sala Ebenezer',
+  sementes: 'Sala Sementes',
+  betel: 'Sala Betel',
+  mahanadance: 'Mahanadance',
+  pastoral: 'Sala Pastoral',
+};
+/** Espaços que existem em cada local (evento externo não tem sala). */
+export const ESPACOS_DA_UNIDADE: Record<Unidade, readonly Espaco[]> = {
+  'santo-andre': ['templo', 'ebenezer', 'sementes', 'betel', 'mahanadance'],
+  'ribeirao-pires': ['templo', 'pastoral'],
+  externo: [],
+};
+
 /** Data no formato AAAA-MM-DD */
 export type DataIso = string;
 /** Ano e mês no formato AAAA-MM */
@@ -35,7 +63,11 @@ export interface EventoDados {
   n: string;
   /** horário, ex.: "10h" ou "18h30" */
   t?: string | undefined;
-  /** local ou observação */
+  /** local: Santo André, Ribeirão Pires ou evento externo */
+  un?: Unidade | undefined;
+  /** espaço dentro do local (templo ou sala) */
+  esp?: Espaco | undefined;
+  /** observação livre, ex.: "No culto", "Data a confirmar" */
   l?: string | undefined;
   /** data final, para eventos de vários dias */
   fim?: DataIso | undefined;

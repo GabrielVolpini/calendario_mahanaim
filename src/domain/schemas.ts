@@ -6,7 +6,7 @@
 // Os mesmos esquemas podem ser reaproveitados no servidor.
 // =====================================================================
 import { z } from 'zod';
-import { CATEGORIAS, CORES_CAMPANHA, ESCOPOS, PERFIS } from './types';
+import { CATEGORIAS, CORES_CAMPANHA, ESCOPOS, ESPACOS, ESPACOS_DA_UNIDADE, PERFIS, UNIDADES } from './types';
 
 // ---------- blocos básicos ----------
 
@@ -73,8 +73,14 @@ export const EventoInput = z
     c: z.enum(CATEGORIAS, { error: 'Escolha um tipo válido.' }),
     data: dataIso,
     t: z.preprocess(vazioViraAusente, horario.optional()),
-    l: textoOpcional('o local ou observação', 80),
+    un: z.preprocess(vazioViraAusente, z.enum(UNIDADES, { error: 'Escolha um local válido.' }).optional()),
+    esp: z.preprocess(vazioViraAusente, z.enum(ESPACOS, { error: 'Escolha um espaço válido.' }).optional()),
+    l: textoOpcional('a observação', 80),
     fim: z.preprocess(vazioViraAusente, dataIso.optional()),
+  })
+  .refine(e => !e.esp || (!!e.un && ESPACOS_DA_UNIDADE[e.un].includes(e.esp)), {
+    path: ['esp'],
+    message: 'Esse espaço não existe no local escolhido.',
   })
   .refine(e => !e.fim || e.fim > e.data, {
     path: ['fim'],

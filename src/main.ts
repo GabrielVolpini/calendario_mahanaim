@@ -5,7 +5,7 @@ import './styles.css';
 import { MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
 import { EventoInput, NovoUsuarioInput, TrocaSenhaInput, primeiraMensagem } from './domain/schemas';
 import {
-  CATEGORIAS, CORES_CAMPANHA,
+  CATEGORIAS, CORES_CAMPANHA, ESPACOS_DA_UNIDADE, NOME_ESPACO, NOME_UNIDADE, UNIDADES,
   type AnoMes, type Campanhas, type Categoria, type CorCampanha, type DataIso, type Escopo,
   type Evento, type EventoDados, type SolicitacaoView, type StatusSolicitacao, type Usuario,
 } from './domain/types';
@@ -58,8 +58,14 @@ const active = new Set<Categoria>(CATEGORIAS);
 const isAdmin = () => ME?.perfil === 'admin';
 
 // ---------- apresentação ----------
-const sub = (e: ItemDia) =>
-  [e.l, e.total ? (e.l ? `dia ${e.dia} de ${e.total}` : `Dia ${e.dia} de ${e.total}`) : null].filter(Boolean).join(' · ');
+/** "Santo André · Sala Betel · No culto" (só o que estiver preenchido). */
+const onde = (e: EventoDados): string[] =>
+  [e.un && NOME_UNIDADE[e.un], e.esp && NOME_ESPACO[e.esp], e.l].filter((x): x is string => !!x);
+const sub = (e: ItemDia) => {
+  const partes = onde(e);
+  if (e.total) partes.push(`${partes.length ? 'dia' : 'Dia'} ${e.dia} de ${e.total}`);
+  return partes.join(' · ');
+};
 const label = (e: ItemDia) => e.n + (sub(e) ? ` – ${sub(e)}` : '');
 const dot = (c: Categoria, pend = false): SafeHtml =>
   html`<i class="dot${pend ? ' pend' : ''}" style="--c:${color(c)}"></i>`;
@@ -475,6 +481,9 @@ const f = {
   multi: $<HTMLInputElement>('#fMulti'),
   endWrap: $('#fEndWrap'),
   end: $<HTMLInputElement>('#fEnd'),
+  un: $<HTMLSelectElement>('#fUn'),
+  espWrap: $('#fEspWrap'),
+  esp: $<HTMLSelectElement>('#fEsp'),
   loc: $<HTMLInputElement>('#fLoc'),
   scope: $<HTMLFieldSetElement>('#fScope'),
   msgWrap: $('#fMsgWrap'),
@@ -487,6 +496,16 @@ const radioEscopo = (name: string): Escopo =>
   $<HTMLInputElement>(`input[name=${name}]:checked`).value === 'proximos' ? 'proximos' : 'um';
 
 setHtml(f.cat, html`${CATEGORIAS.map(c => html`<option value="${c}">${CATS[c].one}</option>`)}`);
+setHtml(f.un, html`<option value="">Não definido</option>${UNIDADES.map(u => html`<option value="${u}">${NOME_UNIDADE[u]}</option>`)}`);
+/** Mostra só os espaços do local escolhido; mantém o atual se ele existir lá. */
+function preencherEspacos(atual = f.esp.value): void {
+  const un = UNIDADES.find(u => u === f.un.value);
+  const lista = un ? ESPACOS_DA_UNIDADE[un] : [];
+  setHtml(f.esp, html`<option value="">Não definido</option>${lista.map(s => html`<option value="${s}">${NOME_ESPACO[s]}</option>`)}`);
+  f.esp.value = lista.some(s => s === atual) ? atual : '';
+  f.espWrap.hidden = !lista.length;
+}
+f.un.addEventListener('change', () => preencherEspacos());
 f.multi.addEventListener('change', () => { f.endWrap.hidden = !f.multi.checked; });
 $$<HTMLInputElement>('input[name=scope]').forEach(r => r.addEventListener('change', () => {
   f.date.disabled = r.value === 'proximos' && r.checked;
@@ -515,6 +534,8 @@ function openForm(ctx: FormCtx): void {
   f.multi.checked = !!e.fim;
   f.endWrap.hidden = !e.fim;
   f.end.value = e.fim ?? '';
+  f.un.value = e.un ?? '';
+  preencherEspacos(e.esp ?? '');
   f.loc.value = e.l ?? '';
   f.scope.hidden = !(ctx.mode === 'edit' && ctx.ev.serie);
   $<HTMLInputElement>('input[name=scope][value=um]').checked = true;
@@ -539,7 +560,7 @@ f.form.addEventListener('submit', async ev => {
   // Validação na tela (resposta imediata). A API valida de novo: nunca confiar só na tela.
   const candidato = {
     n: f.title.value, c: f.cat.value, data: f.date.value, t: inputParaHora(f.time.value),
-    l: f.loc.value, fim: f.multi.checked ? f.end.value : '',
+    un: f.un.value, esp: f.espWrap.hidden ? '' : f.esp.value, l: f.loc.value, fim: f.multi.checked ? f.end.value : '',
   };
   if (f.multi.checked && !f.end.value) return mostrarErro('Informe a data final.');
   const v = EventoInput.safeParse(candidato);
@@ -657,7 +678,7 @@ function renderRequests(): void {
       : html`<div class="acts"><button class="btn sm danger" data-cancel="${r.id}">Cancelar solicitação</button></div>`;
     const resposta = r.status === 'pendente' ? '' : html`<div class="reply"><b>${NOME_STATUS[r.status]} por ${r.revisorNome ?? '—'}</b> · ${r.revisadoEm ? fmtWhen(r.revisadoEm) : ''}${r.motivo ? html`<blockquote>${r.motivo}</blockquote>` : ''}</div>`;
     return html`<article class="card">
-      <div class="head"><div><h3>${dot(e.c)}${e.n}</h3><div class="meta">${quando}${e.l ? ` · ${e.l}` : ''} · ${CATS[e.c].one}</div></div><span class="badge ${r.status}">${NOME_STATUS[r.status]}</span></div>
+      <div class="head"><div><h3>${dot(e.c)}${e.n}</h3><div class="meta">${[quando, ...onde(e)].join(' · ')} · ${CATS[e.c].one}</div></div><span class="badge ${r.status}">${NOME_STATUS[r.status]}</span></div>
       ${r.mensagem ? html`<blockquote>${r.mensagem}</blockquote>` : ''}
       <div class="by">Enviada por ${r.autorNome} · ${fmtWhen(r.criadoEm)}</div>
       ${resposta}${acoes}
