@@ -2,7 +2,7 @@
 // TELA (front-end). Só conversa com o "servidor" através de `api`.
 // =====================================================================
 import './styles.css';
-import { MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
+import { BANCO_NAO_CONFIGURADO, MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
 import { EventoInput, NovoUsuarioInput, TrocaSenhaInput, primeiraMensagem } from './domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA, ESPACOS_DA_UNIDADE, NOME_ESPACO, NOME_UNIDADE, UNIDADES,
@@ -150,15 +150,7 @@ lg.form.addEventListener('submit', async ev => {
   }
   lg.submit.disabled = false;
 });
-$$<HTMLButtonElement>('[data-demo]').forEach(b => b.addEventListener('click', () => {
-  const admin = b.dataset['demo'] === 'admin';
-  lg.email.value = admin ? 'admin@mahanaim.demo' : 'membro@mahanaim.demo';
-  lg.pass.value = admin ? 'admin123' : 'membro123';
-  lg.form.requestSubmit();
-}));
 $('#lgForgot').addEventListener('click', () => toast('Recuperação de senha por e-mail ainda não está disponível. Fale com a liderança.'));
-// Botões de acesso de demonstração só existem no modo protótipo
-$<HTMLElement>('#loginForm .demo').hidden = !MODO_DEMO;
 
 async function enterApp(): Promise<void> {
   if (!ME) return showLogin();
@@ -935,6 +927,14 @@ void (async function init() {
   const mh = /^#(\d{4})-(\d{2})$/.exec(location.hash);
   if (mh) c = { y: Number(mh[1]), m: Number(mh[2]) - 1 };
   if (dentroDoPeriodo(c)) cur = c;
+  if (BANCO_NAO_CONFIGURADO) {
+    // Site publicado sem as chaves do Supabase: não cai nos dados de exemplo
+    showLogin();
+    lg.err.textContent = 'O site está sem a configuração do banco de dados. Avise o responsável pelo sistema.';
+    lg.err.hidden = false;
+    lg.submit.disabled = true;
+    return;
+  }
   ME = await api.me();
   if (ME) await enterApp(); else showLogin();
 })();

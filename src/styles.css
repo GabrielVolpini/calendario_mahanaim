@@ -78,10 +78,6 @@ input:disabled{opacity:.55}
 .linkbtn{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13.5px}
 .login .forgot{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .login .forgot .check{margin:0}
-.demo{margin-top:20px;border-top:1px dashed var(--line);padding-top:14px}
-.demo p{margin:0 0 8px;color:var(--faint);font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
-.demo div{display:flex;gap:8px}
-.demo .btn{flex:1}
 
 /* ---------- Barra superior ---------- */
 .appbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
