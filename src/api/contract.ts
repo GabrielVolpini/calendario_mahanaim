@@ -8,13 +8,15 @@
 import type {
   AnoMes, Campanhas, Escopo, Evento, EventoDados, Solicitacao, SolicitacaoView, Usuario,
 } from '../domain/types';
-import type { AtualizarUsuarioInput, CampanhaInput, NovoUsuarioInput } from '../domain/schemas';
+import type { AtualizarUsuarioInput, CampanhaInput, NovoUsuarioInput, TrocaSenhaInput } from '../domain/schemas';
 
 export interface CalendarApi {
   // Autenticação
   login(email: string, senha: string, lembrar: boolean): Promise<Usuario>;
   logout(): Promise<void>;
   me(): Promise<Usuario | null>;
+  /** Primeiro acesso: troca a senha provisória pela definitiva. */
+  changePassword(dados: TrocaSenhaInput): Promise<Usuario>;
 
   // Eventos (gravar e excluir: só admin)
   listEvents(): Promise<Evento[]>;
@@ -37,6 +39,8 @@ export interface CalendarApi {
   listUsers(): Promise<Usuario[]>;
   createUser(dados: NovoUsuarioInput): Promise<Usuario>;
   updateUser(dados: AtualizarUsuarioInput): Promise<Usuario>;
+  /** Exclui o acesso de vez (no Supabase: apaga do Auth). Ninguém exclui o próprio acesso. */
+  deleteUser(id: string): Promise<void>;
 
   // Somente no protótipo
   resetDemo(): Promise<void>;

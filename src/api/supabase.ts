@@ -8,7 +8,9 @@
 // Diferenças de formato entre o app e o banco ficam todas neste arquivo:
 //   app  c (categoria)  ↔  banco tipo (tipos_evento.slug)
 //   app  t "18h30"      ↔  banco hora_inicio '18:30:00'
-//   app  l (local/obs.) ↔  banco local_id (se for um local cadastrado) ou observacao
+//   app  un (local)     ↔  banco local_id (locais.nome = NOME_UNIDADE)
+//   app  l (observação) ↔  banco observacao
+//   app  esp (espaço)   ↔  banco espaco (externo, templo ou uma das salas)
 //   app  serie          ↔  banco serie_id
 // =====================================================================
 import { createClient, type AuthError, type PostgrestError, type SupportedStorage } from '@supabase/supabase-js';
@@ -19,11 +21,11 @@ import { ApiError } from './errors';
 import { limpo, validar } from './comum';
 import {
   AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
-  NovoUsuarioInput, SolicitacaoInput, anoMes, id as idSchema,
+  NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
-  CORES_CAMPANHA, ESCOPOS,
-  type Campanhas, type Categoria, type CorCampanha, type Evento, type EventoDados,
+  CORES_CAMPANHA, ESCOPOS, ESPACOS, NOME_UNIDADE, UNIDADES,
+  type Campanhas, type Espaco, type Unidade, type Categoria, type CorCampanha, type Evento, type EventoDados,
   type Solicitacao, type SolicitacaoView, type StatusSolicitacao, type Usuario,
 } from '../domain/types';
 
@@ -81,6 +83,12 @@ function horaBanco(t: string | undefined): string | null {
 const STATUS_APP: Partial<Record<Status, StatusSolicitacao>> = { pendente: 'pendente', aprovado: 'aprovada', recusado: 'recusada' };
 const corCampanha = (c: string): CorCampanha => ((CORES_CAMPANHA as readonly string[]).includes(c) ? (c as CorCampanha) : 'azul');
 const opc = (v: string | null | undefined): string | undefined => v ?? undefined;
+/** Local vindo do banco (pelo nome cadastrado em locais). */
+const unidadeApp = (nome: string | null | undefined): Unidade | undefined =>
+  UNIDADES.find(u => NOME_UNIDADE[u] === nome);
+/** Espaço vindo do banco: só aceita os valores conhecidos. */
+const espacoApp = (v: string | null): Espaco | undefined =>
+  (ESPACOS as readonly string[]).includes(v ?? '') ? (v as Espaco) : undefined;
 
 // ---------- erros do Supabase → ApiError (mensagem segura para a tela) ----------
 function erroBanco(e: PostgrestError): ApiError {
@@ -118,7 +126,13 @@ function exigir<R extends Resposta>(r: R): NonNullable<R['data']> {
   return d as NonNullable<R['data']>;
 }
 
-const COLUNAS_EVENTO = 'id, titulo, tipo, data_inicio, data_fim, hora_inicio, observacao, serie_id, local_id, locais(nome)' as const;
+const COLUNAS_PERFIL = 'id, nome, email, perfil, ativo, senha_provisoria' as const;
+type LinhaPerfil = Pick<Database['public']['Tables']['perfis']['Row'], 'id' | 'nome' | 'email' | 'perfil' | 'ativo' | 'senha_provisoria'>;
+const paraUsuario = (r: LinhaPerfil): Usuario => ({
+  id: r.id, nome: r.nome, email: r.email, perfil: r.perfil, ativo: r.ativo, senhaProvisoria: r.senha_provisoria,
+});
+
+const COLUNAS_EVENTO = 'id, titulo, tipo, data_inicio, data_fim, hora_inicio, observacao, espaco, serie_id, local_id, locais(nome)' as const;
 const PAGINA = 1000; // limite padrão de linhas por requisição no Supabase
 
 export function createSupabaseApi(url: string, chave: string): CalendarApi {
@@ -130,15 +144,31 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
   async function perfilAtual(): Promise<Usuario | null> {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return null;
-    const { data, error } = await sb.from('perfis').select('id, nome, email, perfil, ativo').eq('id', session.user.id).maybeSingle();
+    const { data, error } = await sb.from('perfis').select(COLUNAS_PERFIL).eq('id', session.user.id).maybeSingle();
     if (error || !data) return null;
     if (!data.ativo) { await sb.auth.signOut(); return null; }
-    return data;
+    return paraUsuario(data);
   }
   async function exigirUsuario(): Promise<Usuario> {
     const u = await perfilAtual();
     if (!u) throw new ApiError('NAO_AUTENTICADO', 'Sua sessão expirou. Entre novamente.');
     return u;
+  }
+
+  /**
+   * Chama uma Edge Function (operações que exigem a chave de serviço, que fica no servidor).
+   * As funções respondem { codigo, erro } quando algo dá errado.
+   */
+  async function funcao<T>(nome: string, corpo: object, falhaPadrao: string): Promise<T> {
+    const { data, error } = await sb.functions.invoke<T>(nome, { body: corpo });
+    if (error) {
+      const resp = await (error as { context?: Response }).context?.json?.().catch(() => null) as { codigo?: string; erro?: string } | null;
+      const conhecidos = ['CONFLITO', 'SEM_PERMISSAO', 'NAO_AUTENTICADO', 'NAO_ENCONTRADO'] as const;
+      const codigo = conhecidos.find(c => c === resp?.codigo) ?? 'VALIDACAO';
+      throw new ApiError(codigo, resp?.erro ?? falhaPadrao);
+    }
+    if (!data) throw new ApiError('VALIDACAO', falhaPadrao);
+    return data;
   }
 
   // ---------- locais (cache: mudam raramente) ----------
@@ -148,22 +178,27 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
 
   /** Converte os campos da tela para colunas do banco. */
   async function colunas(d: EventoDados, tipoAtual?: string): Promise<EventoUpdate> {
-    const localId = d.l ? (await mapaLocais()).get(d.l) : undefined;
+    const localId = d.un ? (await mapaLocais()).get(NOME_UNIDADE[d.un]) : undefined;
+    if (d.un && !localId) throw new ApiError('VALIDACAO', `O local "${NOME_UNIDADE[d.un]}" não está cadastrado no banco.`);
     return {
       titulo: d.n, tipo: tipoDoBanco(d.c, tipoAtual), data_inicio: d.data, data_fim: d.fim ?? null,
-      hora_inicio: horaBanco(d.t), local_id: localId ?? null, observacao: localId ? null : (d.l ?? null),
+      hora_inicio: horaBanco(d.t), local_id: localId ?? null, observacao: d.l ?? null,
+      espaco: d.esp ?? null,
     };
   }
 
   type LinhaEvento = {
     id: string; titulo: string; tipo: string; data_inicio: string; data_fim: string | null; hora_inicio: string | null;
-    observacao: string | null; serie_id: string | null; locais: { nome: string } | null;
+    observacao: string | null; espaco: string | null; serie_id: string | null; locais: { nome: string } | null;
   };
   const paraEvento = (r: LinhaEvento): Evento => {
     const e: Evento = { id: r.id, data: r.data_inicio, c: categoria(r.tipo), n: r.titulo };
-    const t = horaApp(r.hora_inicio), l = r.locais?.nome ?? opc(r.observacao);
+    const t = horaApp(r.hora_inicio), un = unidadeApp(r.locais?.nome), l = opc(r.observacao);
     if (t) e.t = t;
+    if (un) e.un = un;
     if (l) e.l = l;
+    const esp = espacoApp(r.espaco);
+    if (esp) e.esp = esp;
     if (r.data_fim && r.data_fim !== r.data_inicio) e.fim = r.data_fim;
     if (r.serie_id) e.serie = r.serie_id;
     return e;
@@ -181,9 +216,12 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
     const status = r.status ? STATUS_APP[r.status] : undefined;
     if (!status || !r.id || !r.titulo || !r.tipo || !r.data_inicio) return null; // canceladas somem da lista
     const evento: EventoDados = { data: r.data_inicio, c: categoria(r.tipo), n: r.titulo };
-    const t = horaApp(r.hora_inicio), l = opc(r.local_nome) ?? opc(r.observacao);
+    const t = horaApp(r.hora_inicio), un = unidadeApp(r.local_nome), l = opc(r.observacao);
     if (t) evento.t = t;
+    if (un) evento.un = un;
     if (l) evento.l = l;
+    const esp = espacoApp(r.espaco);
+    if (esp) evento.esp = esp;
     if (r.data_fim) evento.fim = r.data_fim;
     return {
       id: r.id, status, autorId: r.solicitante_id ?? '', criadoEm: r.criado_em ?? '', evento,
@@ -226,6 +264,18 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
       locais = null;
     },
     async me() { return perfilAtual(); },
+    async changePassword(dados) {
+      await exigirUsuario();
+      const d = validar(TrocaSenhaInput, dados);
+      const { error } = await sb.auth.updateUser({ password: d.senha });
+      if (error) {
+        if (error.code === 'same_password') throw new ApiError('VALIDACAO', 'A nova senha precisa ser diferente da senha provisória.');
+        if (error.code === 'weak_password') throw new ApiError('VALIDACAO', 'Senha muito fraca. Use uma senha mais longa e menos óbvia.');
+        throw erroAuth(error);
+      }
+      ok(await sb.rpc('concluir_troca_senha'));
+      return exigirUsuario();
+    },
 
     // -------- Eventos --------
     async listEvents() {
@@ -253,8 +303,8 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
       const novo = await colunas(d, atual.tipo);
       if (esc === 'proximos' && atual.serie_id) {
         // Na série, muda título, tipo, horário e local; as datas continuam as mesmas.
-        const { titulo, tipo, hora_inicio, local_id, observacao } = novo;
-        ok(await sb.from('eventos').update({ titulo, tipo, hora_inicio, local_id, observacao, atualizado_por: u.id })
+        const { titulo, tipo, hora_inicio, local_id, observacao, espaco } = novo;
+        ok(await sb.from('eventos').update({ titulo, tipo, hora_inicio, local_id, observacao, espaco, atualizado_por: u.id })
           .eq('serie_id', atual.serie_id).gte('data_inicio', atual.data_inicio));
       } else {
         // "Somente este dia": vira exceção e sai da série
@@ -289,6 +339,7 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
         ...(c.hora_inicio && { p_hora_inicio: c.hora_inicio }),
         ...(c.local_id && { p_local_id: c.local_id }),
         ...(c.observacao && { p_observacao: c.observacao }),
+        ...(c.espaco && { p_espaco: c.espaco }),
         ...(d.mensagem && { p_mensagem: d.mensagem }),
       }));
       return solicitacao(id);
@@ -333,20 +384,14 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
     // -------- Usuários --------
     async listUsers() {
       await exigirUsuario();
-      return exigir(await sb.from('perfis').select('id, nome, email, perfil, ativo').order('nome'));
+      return exigir(await sb.from('perfis').select(COLUNAS_PERFIL).order('nome')).map(paraUsuario);
     },
     async createUser(dados) {
       await exigirUsuario();
       const d = validar(NovoUsuarioInput, dados);
       // Criar acesso exige a chave de serviço → feito na Edge Function "criar-usuario"
-      const { data, error } = await sb.functions.invoke<{ usuario: Usuario }>('criar-usuario', { body: d });
-      if (error) {
-        const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null) as { codigo?: string; erro?: string } | null;
-        const codigo = corpo?.codigo === 'CONFLITO' || corpo?.codigo === 'SEM_PERMISSAO' || corpo?.codigo === 'NAO_AUTENTICADO' ? corpo.codigo : 'VALIDACAO';
-        throw new ApiError(codigo, corpo?.erro ?? 'Não foi possível criar o acesso.');
-      }
-      if (!data) throw new ApiError('VALIDACAO', 'Não foi possível criar o acesso.');
-      return data.usuario;
+      const r = await funcao<{ usuario: LinhaPerfil }>('criar-usuario', d, 'Não foi possível criar o acesso.');
+      return paraUsuario(r.usuario);
     },
     async updateUser(dados) {
       await exigirUsuario();
@@ -354,9 +399,16 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
       const mudar: { perfil?: 'admin' | 'user'; ativo?: boolean } = {};
       if (d.perfil) mudar.perfil = d.perfil;
       if (d.ativo !== undefined) mudar.ativo = d.ativo;
-      const u = ok(await sb.from('perfis').update(mudar).eq('id', d.id).select('id, nome, email, perfil, ativo').maybeSingle());
+      const u = ok(await sb.from('perfis').update(mudar).eq('id', d.id).select(COLUNAS_PERFIL).maybeSingle());
       if (!u) throw new ApiError('NAO_ENCONTRADO', 'Usuário não encontrado.');
-      return u;
+      return paraUsuario(u);
+    },
+    async deleteUser(id) {
+      const u = await exigirUsuario();
+      const alvo = validar(idSchema, id);
+      if (alvo === u.id) throw new ApiError('CONFLITO', 'Você não pode excluir o seu próprio acesso.');
+      // Apagar do Auth exige a chave de serviço → Edge Function "excluir-usuario"
+      await funcao<{ ok: true }>('excluir-usuario', { id: alvo }, 'Não foi possível excluir o acesso.');
     },
 
     // -------- Só existe no protótipo --------

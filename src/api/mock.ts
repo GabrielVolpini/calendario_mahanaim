@@ -10,10 +10,10 @@ import { limpo, validar } from './comum';
 import { criarBancoDemo, type Banco, type UsuarioDemo } from '../data/seed';
 import {
   AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
-  NovoUsuarioInput, SolicitacaoInput, anoMes, id as idSchema,
+  NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
-  CATEGORIAS, CORES_CAMPANHA, ESCOPOS, PERFIS, STATUS_SOLICITACAO,
+  CATEGORIAS, CORES_CAMPANHA, ESCOPOS, ESPACOS, NOME_UNIDADE, PERFIS, STATUS_SOLICITACAO, UNIDADES,
   type Escopo, type Evento, type Usuario,
 } from '../domain/types';
 
@@ -32,13 +32,14 @@ const apagar = (a: Area, k: string): void => { try { window[a].removeItem(k); } 
 // ---------- validação do que vem do armazenamento (não confiar cegamente) ----------
 const opt = z.string().optional();
 const EventoSalvo = z.object({
-  id: z.string(), data: z.string(), c: z.enum(CATEGORIAS), n: z.string(), t: opt, l: opt, fim: opt, serie: opt,
+  id: z.string(), data: z.string(), c: z.enum(CATEGORIAS), n: z.string(), t: opt, l: opt, un: z.enum(UNIDADES).optional(), esp: z.enum(ESPACOS).optional(), fim: opt, serie: opt,
 });
 const BancoSalvo = z.object({
   events: z.array(EventoSalvo),
   campanhas: z.record(z.string(), z.object({ n: z.string(), s: z.string(), c: z.enum(CORES_CAMPANHA) })),
   users: z.array(z.object({
     id: z.string(), nome: z.string(), email: z.string(), senha: z.string(), perfil: z.enum(PERFIS), ativo: z.boolean(),
+    senhaProvisoria: z.boolean().default(false), // dados salvos antes deste campo existir
   })),
   requests: z.array(z.object({
     id: z.string(), status: z.enum(STATUS_SOLICITACAO), autorId: z.string(), criadoEm: z.string(),
@@ -55,18 +56,30 @@ function carregar(): Banco {
   if (raw) {
     try {
       const r = BancoSalvo.safeParse(JSON.parse(raw));
-      if (r.success) return r.data;
+      if (r.success) return migrarLocais(r.data);
       console.warn('Dados locais inválidos; voltando aos dados de exemplo.', r.error.issues[0]);
     } catch { /* JSON corrompido */ }
   }
   return criarBancoDemo();
 }
 
+/** Dados guardados antes do campo "local": "Santo André"/"Ribeirão Pires" estavam na observação. */
+function migrarLocais(db: Banco): Banco {
+  const porNome = new Map(UNIDADES.map(u => [NOME_UNIDADE[u], u] as const));
+  for (const e of [...db.events, ...db.requests.map(r => r.evento)]) {
+    const un = e.l ? porNome.get(e.l) : undefined;
+    if (un && !e.un) { e.un = un; delete e.l; }
+  }
+  return db;
+}
+
 // ---------- utilidades ----------
 const clone = <T>(o: T): T => structuredClone(o);
 const agora = () => new Date().toISOString().slice(0, 19);
 const responder = <T>(v: T): Promise<T> => new Promise(r => setTimeout(() => r(clone(v)), 60));
-const publico = (u: UsuarioDemo): Usuario => ({ id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo });
+const publico = (u: UsuarioDemo): Usuario => ({
+  id: u.id, nome: u.nome, email: u.email, perfil: u.perfil, ativo: u.ativo, senhaProvisoria: u.senhaProvisoria,
+});
 
 export function createMockApi(): CalendarApi {
   let db = carregar();
@@ -136,6 +149,15 @@ export function createMockApi(): CalendarApi {
       const u = usuarioAtual();
       return responder(u ? publico(u) : null);
     },
+    async changePassword(dados) {
+      const u = exigirUsuario();
+      const d = validar(TrocaSenhaInput, dados);
+      if (d.senha === u.senha) throw new ApiError('VALIDACAO', 'A nova senha precisa ser diferente da senha provisória.');
+      u.senha = d.senha;
+      u.senhaProvisoria = false;
+      salvar();
+      return responder(publico(u));
+    },
 
     // -------- Eventos --------
     async listEvents() { exigirUsuario(); return responder(db.events); },
@@ -158,6 +180,8 @@ export function createMockApi(): CalendarApi {
           x.c = d.c; x.n = d.n;
           if (d.t) x.t = d.t; else delete x.t;
           if (d.l) x.l = d.l; else delete x.l;
+          if (d.un) x.un = d.un; else delete x.un;
+          if (d.esp) x.esp = d.esp; else delete x.esp;
         }
         salvar();
         return responder(atual);
@@ -188,6 +212,8 @@ export function createMockApi(): CalendarApi {
     },
     async createRequest(evento, mensagem) {
       const u = exigirUsuario();
+      // Admin publica direto (createEvent); solicitação é só para User
+      if (u.perfil === 'admin') throw new ApiError('VALIDACAO', 'Quem é admin cria o evento direto no calendário, sem passar por aprovação.');
       const d = validar(SolicitacaoInput, { evento, mensagem });
       const pendentes = db.requests.filter(r => r.autorId === u.id && r.status === 'pendente').length;
       if (pendentes >= 10) throw new ApiError('CONFLITO', 'Você já tem 10 solicitações pendentes. Aguarde a liderança responder.');
@@ -240,7 +266,7 @@ export function createMockApi(): CalendarApi {
       exigirAdmin();
       const d = validar(NovoUsuarioInput, dados);
       if (db.users.some(u => u.email === d.email)) throw new ApiError('CONFLITO', 'Já existe um acesso com este e-mail.');
-      const u: UsuarioDemo = { id: novoId('u'), ...d, ativo: true };
+      const u: UsuarioDemo = { id: novoId('u'), ...d, ativo: true, senhaProvisoria: true };
       db.users.push(u); salvar();
       return responder(publico(u));
     },
@@ -255,6 +281,18 @@ export function createMockApi(): CalendarApi {
       if (d.ativo !== undefined) u.ativo = d.ativo;
       salvar();
       return responder(publico(u));
+    },
+
+    async deleteUser(id) {
+      const admin = exigirAdmin();
+      const alvo = validar(idSchema, id);
+      if (alvo === admin.id) throw new ApiError('CONFLITO', 'Você não pode excluir o seu próprio acesso.');
+      if (!db.users.some(u => u.id === alvo)) throw new ApiError('NAO_ENCONTRADO', 'Usuário não encontrado.');
+      // Igual ao banco: o acesso e os pedidos dele somem; eventos publicados ficam.
+      db.users = db.users.filter(u => u.id !== alvo);
+      db.requests = db.requests.filter(r => r.autorId !== alvo);
+      salvar();
+      return responder(undefined);
     },
 
     // -------- Somente no protótipo --------

@@ -20,18 +20,18 @@ export interface Banco {
   seq: number;
 }
 
-const SA = 'Santo André', RP = 'Ribeirão Pires';
+const SA = 'santo-andre' as const, RP = 'ribeirao-pires' as const;
 const key = (y: number, m: number, d: number) =>
   `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-type Extra = Partial<Pick<Evento, 't' | 'l' | 'serie' | 'fim'>>;
+type Extra = Partial<Pick<Evento, 't' | 'l' | 'un' | 'serie' | 'fim'>>;
 
 function gerarEventos(): Evento[] {
   const events: Evento[] = [];
   let seq = 0;
   const add = (data: string, c: Categoria, n: string, extra: Extra = {}) => {
     const e: Evento = { id: 'e' + ++seq, data, c, n };
-    for (const [k, v] of Object.entries(extra) as [keyof Extra, string | undefined][]) if (v != null) e[k] = v;
+    Object.assign(e, Object.fromEntries(Object.entries(extra).filter(([, v]) => v != null)));
     events.push(e);
   };
 
@@ -41,18 +41,18 @@ function gerarEventos(): Evento[] {
     const dim = new Date(y, m + 1, 0).getDate(), nth = Math.ceil(d / 7), last = d + 7 > dim;
     if (w === 0) {
       if ((nth === 2 && k !== '2026-12-13') || k === '2026-12-06') add(k, 'culto', 'Culto de Santa Ceia', { serie: 'santa-ceia' });
-      add(k, 'culto', 'Culto da Família', { t: '10h', l: SA, serie: 'familia-10h-sa' });
-      if (!['2026-12-27', '2027-01-03'].includes(k)) add(k, 'culto', 'Culto da Família', { t: '18h30', l: SA, serie: 'familia-1830-sa' });
-      add(k, 'culto', 'Culto da Família', { t: '18h30', l: RP, serie: 'familia-1830-rp' });
+      add(k, 'culto', 'Culto da Família', { t: '10h', un: SA, serie: 'familia-10h-sa' });
+      if (!['2026-12-27', '2027-01-03'].includes(k)) add(k, 'culto', 'Culto da Família', { t: '18h30', un: SA, serie: 'familia-1830-sa' });
+      add(k, 'culto', 'Culto da Família', { t: '18h30', un: RP, serie: 'familia-1830-rp' });
     }
     if (w === 1 && nth === 3 && k !== '2026-11-16') add(k, 'culto', 'Culto de Homens de Honra', { serie: 'homens-honra' });
     if (k === '2026-11-30') add(k, 'culto', 'Culto de Homens de Honra', { l: 'Data alterada (era 16/11)' });
     if (w === 2) {
-      add(k, 'culto', 'Terça Profética', { l: SA, serie: 'terca-profetica' });
+      add(k, 'culto', 'Terça Profética', { un: SA, serie: 'terca-profetica' });
       add(k, 'culto', 'Teens', { serie: 'teens' });
     }
-    if (w === 3) add(k, 'culto', 'Quarta Profética', { l: RP, serie: 'quarta-profetica' });
-    if (w === 4 && !['2026-12-24', '2026-12-31'].includes(k)) add(k, 'culto', 'Culto de Oração', { l: SA, serie: 'oracao' });
+    if (w === 3) add(k, 'culto', 'Quarta Profética', { un: RP, serie: 'quarta-profetica' });
+    if (w === 4 && !['2026-12-24', '2026-12-31'].includes(k)) add(k, 'culto', 'Culto de Oração', { un: SA, serie: 'oracao' });
     if (w === 6) {
       if (nth === 3) add(k, 'culto', 'Culto das Mulheres', { serie: 'mulheres' });
       if (last && !['2027-03-27', '2026-12-26'].includes(k)) add(k, 'culto', 'Culto Start', { serie: 'start' });
@@ -134,19 +134,19 @@ export function criarBancoDemo(): Banco {
     },
     // Senhas de demonstração (só no protótipo!)
     users: [
-      { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true },
-      { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true },
-      { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true },
+      { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true, senhaProvisoria: false },
+      { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true, senhaProvisoria: false },
+      { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true, senhaProvisoria: false },
     ],
     requests: [
       { id: 'r1', status: 'pendente', autorId: 'u2', criadoEm: '2026-11-14T10:20:00',
         mensagem: 'Gostaríamos de reservar o salão para o ensaio geral de Natal.',
-        evento: { data: '2026-11-21', c: 'evento', n: 'Ensaio geral do Natal', t: '15h', l: SA } },
+        evento: { data: '2026-11-21', c: 'evento', n: 'Ensaio geral do Natal', t: '15h', un: SA } },
       { id: 'r2', status: 'pendente', autorId: 'u3', criadoEm: '2026-11-15T19:02:00',
         mensagem: 'Noite de louvor aberta para toda a igreja.',
-        evento: { data: '2026-12-04', c: 'evento', n: 'Noite de Louvor', t: '20h', l: RP } },
+        evento: { data: '2026-12-04', c: 'evento', n: 'Noite de Louvor', t: '20h', un: RP } },
       { id: 'r3', status: 'recusada', autorId: 'u2', criadoEm: '2026-11-10T08:45:00',
-        evento: { data: '2026-11-20', c: 'evento', n: 'Bazar beneficente', t: '9h', l: SA },
+        evento: { data: '2026-11-20', c: 'evento', n: 'Bazar beneficente', t: '9h', un: SA },
         motivo: 'Feriado: prédio fechado. Que tal 28/11?', revisadoPor: 'u1', revisadoEm: '2026-11-11T09:00:00' },
     ],
     seq: 1000,

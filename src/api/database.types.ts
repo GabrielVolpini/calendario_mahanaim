@@ -20,21 +20,21 @@ export type Database = {
       eventos: {
         Row: {
           atualizado_em: string; atualizado_por: string | null; criado_em: string; criado_por: string | null;
-          data_fim: string | null; data_inicio: string; descricao: string | null; feriado_id: string | null;
+          data_fim: string | null; data_inicio: string; descricao: string | null; espaco: string | null; feriado_id: string | null;
           hora_fim: string | null; hora_inicio: string | null; id: string; local_id: string | null;
           observacao: string | null; qtd_pessoas: number | null; serie_id: string | null;
           status: Database['public']['Enums']['status_evento']; tipo: string; titulo: string;
         };
         Insert: {
           atualizado_em?: string; atualizado_por?: string | null; criado_em?: string; criado_por?: string | null;
-          data_fim?: string | null; data_inicio: string; descricao?: string | null; feriado_id?: string | null;
+          data_fim?: string | null; data_inicio: string; descricao?: string | null; espaco?: string | null; feriado_id?: string | null;
           hora_fim?: string | null; hora_inicio?: string | null; id?: string; local_id?: string | null;
           observacao?: string | null; qtd_pessoas?: number | null; serie_id?: string | null;
           status?: Database['public']['Enums']['status_evento']; tipo: string; titulo: string;
         };
         Update: {
           atualizado_em?: string; atualizado_por?: string | null; criado_em?: string; criado_por?: string | null;
-          data_fim?: string | null; data_inicio?: string; descricao?: string | null; feriado_id?: string | null;
+          data_fim?: string | null; data_inicio?: string; descricao?: string | null; espaco?: string | null; feriado_id?: string | null;
           hora_fim?: string | null; hora_inicio?: string | null; id?: string; local_id?: string | null;
           observacao?: string | null; qtd_pessoas?: number | null; serie_id?: string | null;
           status?: Database['public']['Enums']['status_evento']; tipo?: string; titulo?: string;
@@ -72,15 +72,15 @@ export type Database = {
       perfis: {
         Row: {
           ativo: boolean; atualizado_em: string; criado_em: string; email: string; id: string; nome: string;
-          perfil: Database['public']['Enums']['perfil_usuario'];
+          perfil: Database['public']['Enums']['perfil_usuario']; senha_provisoria: boolean;
         };
         Insert: {
           ativo?: boolean; atualizado_em?: string; criado_em?: string; email: string; id: string; nome: string;
-          perfil?: Database['public']['Enums']['perfil_usuario'];
+          perfil?: Database['public']['Enums']['perfil_usuario']; senha_provisoria?: boolean;
         };
         Update: {
           ativo?: boolean; atualizado_em?: string; criado_em?: string; email?: string; id?: string; nome?: string;
-          perfil?: Database['public']['Enums']['perfil_usuario'];
+          perfil?: Database['public']['Enums']['perfil_usuario']; senha_provisoria?: boolean;
         };
         Relationships: [];
       };
@@ -121,7 +121,7 @@ export type Database = {
     Views: {
       fila_solicitacoes: {
         Row: {
-          criado_em: string | null; data_fim: string | null; data_inicio: string | null; evento_id: string | null;
+          criado_em: string | null; data_fim: string | null; data_inicio: string | null; espaco: string | null; evento_id: string | null;
           hora_fim: string | null; hora_inicio: string | null; id: string | null; local_id: string | null;
           local_nome: string | null; mensagem: string | null; motivo_recusa: string | null; observacao: string | null;
           qtd_pessoas: number | null; revisado_em: string | null; revisado_por: string | null; revisor_nome: string | null;
@@ -134,13 +134,14 @@ export type Database = {
     Functions: {
       aprovar_solicitacao: { Args: { p_id: string }; Returns: undefined };
       cancelar_solicitacao: { Args: { p_id: string }; Returns: undefined };
+      concluir_troca_senha: { Args: never; Returns: undefined };
       data_pascoa: { Args: { ano: number }; Returns: string };
       gerar_feriados: { Args: { p_ano: number }; Returns: number };
       is_admin: { Args: never; Returns: boolean };
       recusar_solicitacao: { Args: { p_id: string; p_motivo?: string }; Returns: undefined };
       solicitar_evento: {
         Args: {
-          p_data_fim?: string; p_data_inicio: string; p_descricao?: string; p_hora_fim?: string; p_hora_inicio?: string;
+          p_data_fim?: string; p_data_inicio: string; p_descricao?: string; p_espaco?: string; p_hora_fim?: string; p_hora_inicio?: string;
           p_local_id?: string; p_mensagem?: string; p_observacao?: string; p_qtd_pessoas?: number;
           p_tipo: string; p_titulo: string;
         };
