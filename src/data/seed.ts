@@ -1,18 +1,37 @@
 // =====================================================================
 // DADOS DE EXEMPLO (SEED)
-// Na fase de banco de dados, este arquivo vira o script de carga inicial.
-// Todos os eventos são registros concretos (uma linha por data). Eventos
-// recorrentes compartilham o mesmo campo `serie`, o que permite editar
-// "somente este dia" ou "este e os próximos".
+// Na fase de banco, isto vira o script de carga inicial.
+// Todos os eventos são registros concretos (um por data). Os recorrentes
+// compartilham o campo `serie`, o que permite editar "somente este dia"
+// ou "este e os próximos".
 // =====================================================================
-window.SEED = (function () {
-  const SA = 'Santo André', RP = 'Ribeirão Pires';
-  const key = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  const events = [];
+import type { Campanhas, Categoria, Evento, Solicitacao, Usuario } from '../domain/types';
+
+/** Usuário como guardado no protótipo. No banco real, NUNCA guardar a senha: só o hash. */
+export interface UsuarioDemo extends Usuario {
+  senha: string;
+}
+
+export interface Banco {
+  events: Evento[];
+  campanhas: Campanhas;
+  users: UsuarioDemo[];
+  requests: Solicitacao[];
+  seq: number;
+}
+
+const SA = 'Santo André', RP = 'Ribeirão Pires';
+const key = (y: number, m: number, d: number) =>
+  `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+type Extra = Partial<Pick<Evento, 't' | 'l' | 'serie' | 'fim'>>;
+
+function gerarEventos(): Evento[] {
+  const events: Evento[] = [];
   let seq = 0;
-  const add = (data, c, n, extra = {}) => {
-    const e = { id: 'e' + (++seq), data, c, n };
-    Object.entries(extra).forEach(([k, v]) => { if (v != null) e[k] = v; });
+  const add = (data: string, c: Categoria, n: string, extra: Extra = {}) => {
+    const e: Evento = { id: 'e' + ++seq, data, c, n };
+    for (const [k, v] of Object.entries(extra) as [keyof Extra, string | undefined][]) if (v != null) e[k] = v;
     events.push(e);
   };
 
@@ -41,7 +60,7 @@ window.SEED = (function () {
   }
 
   // ---- Datas específicas ----
-  [
+  const fixos: [string, Categoria, string, string?][] = [
     ['2026-11-02', 'feriado', 'Finados'],
     ['2026-11-15', 'feriado', 'Proclamação da República'],
     ['2026-11-20', 'feriado', 'Dia da Consciência Negra'],
@@ -93,39 +112,43 @@ window.SEED = (function () {
     ['2027-10-31', 'data', 'Dia da Reforma Protestante', '510 anos'],
     ['2027-11-30', 'data', 'Dia Nacional do Evangélico'],
     ['2027-12-12', 'data', 'Dia da Bíblia'],
-  ].forEach(([k, c, n, l]) => add(k, c, n, { l }));
+  ];
+  fixos.forEach(([k, c, n, l]) => add(k, c, n, { l }));
 
-  // ---- Eventos de vários dias (data + fim) ----
+  // ---- Eventos de vários dias ----
   add('2027-02-26', 'evento', 'Conferência da Igreja', { fim: '2027-02-28', l: 'Aniversário de 14 anos' });
   add('2027-03-25', 'evento', 'Acampamento Start e Teens', { fim: '2027-03-28', l: 'Início na noite de 25/03' });
 
-  // ---- Campanhas do mês ----
-  const campanhas = {
-    '2026-11': { n: 'Novembro Azul', s: 'Conscientização sobre o câncer de próstata', c: 'azul' },
-    '2027-09': { n: 'Setembro Amarelo', s: 'Prevenção ao suicídio', c: 'amarelo' },
-    '2027-10': { n: 'Outubro Rosa', s: 'Conscientização sobre o câncer de mama', c: 'rosa' },
-    '2027-11': { n: 'Novembro Azul', s: 'Conscientização sobre o câncer de próstata', c: 'azul' },
+  return events;
+}
+
+/** Cria um banco novo com os dados de exemplo. */
+export function criarBancoDemo(): Banco {
+  return {
+    events: gerarEventos(),
+    campanhas: {
+      '2026-11': { n: 'Novembro Azul', s: 'Conscientização sobre o câncer de próstata', c: 'azul' },
+      '2027-09': { n: 'Setembro Amarelo', s: 'Prevenção ao suicídio', c: 'amarelo' },
+      '2027-10': { n: 'Outubro Rosa', s: 'Conscientização sobre o câncer de mama', c: 'rosa' },
+      '2027-11': { n: 'Novembro Azul', s: 'Conscientização sobre o câncer de próstata', c: 'azul' },
+    },
+    // Senhas de demonstração (só no protótipo!)
+    users: [
+      { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true },
+      { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true },
+      { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true },
+    ],
+    requests: [
+      { id: 'r1', status: 'pendente', autorId: 'u2', criadoEm: '2026-11-14T10:20:00',
+        mensagem: 'Gostaríamos de reservar o salão para o ensaio geral de Natal.',
+        evento: { data: '2026-11-21', c: 'evento', n: 'Ensaio geral do Natal', t: '15h', l: SA } },
+      { id: 'r2', status: 'pendente', autorId: 'u3', criadoEm: '2026-11-15T19:02:00',
+        mensagem: 'Noite de louvor aberta para toda a igreja.',
+        evento: { data: '2026-12-04', c: 'evento', n: 'Noite de Louvor', t: '20h', l: RP } },
+      { id: 'r3', status: 'recusada', autorId: 'u2', criadoEm: '2026-11-10T08:45:00',
+        evento: { data: '2026-11-20', c: 'evento', n: 'Bazar beneficente', t: '9h', l: SA },
+        motivo: 'Feriado: prédio fechado. Que tal 28/11?', revisadoPor: 'u1', revisadoEm: '2026-11-11T09:00:00' },
+    ],
+    seq: 1000,
   };
-
-  // ---- Usuários de demonstração (senhas em texto só no protótipo!) ----
-  const users = [
-    { id: 'u1', nome: 'Administrador Demo', email: 'admin@mahanaim.demo', senha: 'admin123', perfil: 'admin', ativo: true },
-    { id: 'u2', nome: 'Membro Demo', email: 'membro@mahanaim.demo', senha: 'membro123', perfil: 'user', ativo: true },
-    { id: 'u3', nome: 'Líder de Louvor', email: 'louvor@mahanaim.demo', senha: 'louvor123', perfil: 'user', ativo: true },
-  ];
-
-  // ---- Solicitações de exemplo ----
-  const requests = [
-    { id: 'r1', status: 'pendente', autorId: 'u2', criadoEm: '2026-11-14T10:20:00',
-      mensagem: 'Gostaríamos de reservar o salão para o ensaio geral de Natal.',
-      evento: { data: '2026-11-21', c: 'evento', n: 'Ensaio geral do Natal', t: '15h', l: SA } },
-    { id: 'r2', status: 'pendente', autorId: 'u3', criadoEm: '2026-11-15T19:02:00',
-      mensagem: 'Noite de louvor aberta para toda a igreja.',
-      evento: { data: '2026-12-04', c: 'evento', n: 'Noite de Louvor', t: '20h', l: RP } },
-    { id: 'r3', status: 'recusada', autorId: 'u2', criadoEm: '2026-11-10T08:45:00',
-      evento: { data: '2026-11-20', c: 'evento', n: 'Bazar beneficente', t: '9h', l: SA },
-      motivo: 'Feriado: prédio fechado. Que tal 28/11?', revisadoPor: 'u1', revisadoEm: '2026-11-11T09:00:00' },
-  ];
-
-  return { events, campanhas, users, requests, seq: 1000 };
-})();
+}

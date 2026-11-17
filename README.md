@@ -1,16 +1,32 @@
-# Calendário Mahanaim — protótipo navegável
+# Calendário Mahanaim
 
-Protótipo funcional (estilo "Figma clicável") do calendário da liderança.
-Ainda **sem banco de dados**: tudo é salvo no `localStorage` do navegador,
+Calendário da liderança da Igreja Internacional Mahanaim.
+Feito em **TypeScript** (com **Vite** e **Zod** para as validações).
+Ainda **sem banco de dados**: os dados ficam no `localStorage` do navegador,
 através de uma API simulada que já define o contrato do futuro backend.
 
-## Como abrir
+## Como rodar
+
+Requisito: Node.js 20 ou mais novo.
 
 ```bash
-cd ~/Desktop/calendario_mahanaim && python3 -m http.server 8765
+npm install
 ```
 
-Depois acesse http://127.0.0.1:8765. Na tela de login há dois atalhos de demonstração:
+```bash
+npm run dev
+```
+
+Depois acesse http://127.0.0.1:5173.
+
+| Comando | O que faz |
+|---|---|
+| `npm run dev` | servidor de desenvolvimento (recarrega sozinho) |
+| `npm run typecheck` | confere os tipos do código inteiro |
+| `npm run build` | confere os tipos e gera o site final em `dist/` |
+| `npm run preview` | abre o site gerado em `dist/` |
+
+### Acessos de demonstração
 
 | Perfil | E-mail | Senha |
 |---|---|---|
@@ -20,48 +36,60 @@ Depois acesse http://127.0.0.1:8765. Na tela de login há dois atalhos de demons
 
 No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
 
-## O que o protótipo cobre
+## O que o app faz
 
 - **Login com e-mail e senha** e opção **Lembrar de mim por 30 dias**
   (marcado: sessão de 30 dias; desmarcado: sessão até fechar o navegador).
-- **Perfil User (visualização)**: vê o calendário, envia **solicitações de evento**
-  e acompanha em *Minhas solicitações* (pode cancelar enquanto pendente).
-  O pedido aparece tracejado no calendário só para o autor e para os admins.
-- **Perfil Admin**:
-  - cria, edita e exclui eventos (inclusive de vários dias);
-  - eventos recorrentes (cultos) podem ser alterados em **somente este dia**
-    ou **este e os próximos da série**;
-  - fila de **Solicitações**: aprovar, ajustar e aprovar, ou recusar com motivo;
-  - **Usuários**: criar acesso, trocar perfil, desativar/reativar;
-  - **Campanha do mês** (Novembro Azul etc.): adicionar, editar, remover.
+- **User (visualização)**: vê o calendário, envia **solicitações de evento**
+  e acompanha em *Minhas solicitações*. O pedido aparece tracejado só para o autor e os admins.
+- **Admin**: cria, edita e exclui eventos (inclusive de vários dias e séries de cultos),
+  aprova, ajusta ou recusa solicitações, gerencia usuários e a campanha do mês.
 
 ## Estrutura
 
 ```
-index.html        telas e diálogos
-css/styles.css    visual (claro/escuro, responsivo)
-js/seed.js        dados iniciais (vira o script de carga do banco)
-js/api.js         API simulada = contrato do backend
-js/app.js         lógica da tela; só fala com window.API
+index.html              telas e diálogos
+src/main.ts             lógica da tela (só fala com `api`)
+src/styles.css          visual (claro/escuro, responsivo)
+src/domain/types.ts     tipos do domínio (Evento, Usuario, Solicitacao...)
+src/domain/schemas.ts   validações com Zod (reaproveitáveis no servidor)
+src/api/contract.ts     interface CalendarApi = contrato do backend
+src/api/mock.ts         implementação simulada (localStorage)
+src/api/index.ts        escolhe qual implementação o app usa
+src/api/errors.ts       erros com código (NAO_AUTENTICADO, SEM_PERMISSAO...)
+src/data/seed.ts        dados iniciais (vira a carga inicial do banco)
+src/ui/dom.ts           HTML seguro (escape automático)
+src/ui/format.ts        datas e horários
 ```
+
+## Segurança já aplicada
+
+- **TypeScript no modo mais rigoroso** (`strict`, `noUncheckedIndexedAccess` e outros):
+  o build falha se algum tipo não bater.
+- **Validação de dados com Zod** em toda entrada, na tela (resposta imediata) e de novo na API:
+  - títulos, locais e mensagens com limite de tamanho e sem `<`, `>` ou caracteres de controle;
+  - datas reais entre 2020 e 2100, data final depois da inicial, no máximo 31 dias;
+  - horário no formato da igreja (`10h`, `18h30`);
+  - e-mail válido; senha nova com 8 a 72 caracteres, letra e número;
+  - **campos extras são recusados**: ninguém consegue enviar `id`, `status` ou `serie` por conta própria.
+- **HTML seguro por padrão**: todo texto vai para a tela pelo template `html`, que escapa os valores.
+  Só `setHtml()` escreve `innerHTML`.
+- **Permissões na API**: só Admin grava eventos, aprova pedidos e gerencia usuários;
+  um Admin não pode remover o próprio acesso.
+- **Login**: mesma mensagem para e-mail inexistente e senha errada;
+  **bloqueio de 5 minutos após 5 tentativas erradas**.
+- **Limite de 10 solicitações pendentes** por pessoa.
+- Dados lidos do armazenamento local também passam por validação antes de serem usados.
 
 ## Próxima fase: banco de dados
 
-Trocar o corpo das funções de `js/api.js` por chamadas `fetch()` ao servidor,
-mantendo nomes e retornos. Modelo de dados sugerido:
+Criar uma nova implementação de `CalendarApi` (ex.: `src/api/supabase.ts`) e trocá-la em
+`src/api/index.ts`. O TypeScript aponta qualquer método que ficar faltando.
 
-- **usuarios**: id, nome, email (único), senha_hash, perfil (`admin` | `user`), ativo, criado_em
-- **sessoes**: id, usuario_id, token_hash, expira_em (30 dias se "lembrar de mim"), criado_em
-- **eventos**: id, data, fim (opcional), categoria (`feriado` | `evento` | `aniv` | `data` | `culto`),
-  titulo, horario, local_obs, serie (opcional), criado_por, atualizado_em
-- **solicitacoes**: id, status (`pendente` | `aprovada` | `recusada`), autor_id, evento (dados pedidos),
-  mensagem, motivo, revisado_por, revisado_em, evento_id (quando aprovada), criado_em
-- **campanhas**: ano_mes (PK, ex.: `2026-11`), nome, descricao, cor
+No backend, repetir as mesmas regras (os esquemas de `schemas.ts` podem ser reaproveitados):
 
-Pontos de atenção para o backend:
-
-- As regras de permissão em `api.js` (só admin grava eventos, aprova pedidos e gerencia usuários)
-  precisam ser aplicadas **no servidor**. A tela só esconde botões.
-- Senhas: guardar apenas hash (bcrypt/argon2). No protótipo elas estão em texto puro de propósito.
-- "Lembrar de mim": cookie `HttpOnly` + `Secure` com token de sessão de 30 dias, em vez de `localStorage`.
-- "Esqueci a senha" ainda não tem fluxo (precisa de envio de e-mail).
+- permissões no servidor (ex.: Row Level Security no Supabase);
+- senhas só como hash (o Supabase Auth já faz isso);
+- "lembrar de mim" com sessão do provedor de autenticação, em vez de `localStorage`;
+- limite de tentativas de login no servidor;
+- "Esqueci a senha" (envio de e-mail).
