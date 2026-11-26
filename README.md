@@ -39,7 +39,7 @@ update public.perfis set perfil = 'admin' where email = 'seu-email@exemplo.com';
 Os próximos acessos o admin cria pela tela de **Usuários** (`/users`),
 que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
 
-> **Hospedagem:** a tela de usuários tem rota própria (`/users`). No `npm run dev` isso já funciona;
+> **Hospedagem:** as telas de usuários e de atas têm rota própria (`/users`, `/atas`). No `npm run dev` isso já funciona;
 > ao publicar o `dist/`, configure o servidor para devolver o `index.html` em qualquer caminho
 > (ex.: *rewrite* `/* → /index.html` na Vercel/Netlify).
 
@@ -77,6 +77,12 @@ No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
     (o Supabase guarda só o hash). Na lista ela aparece como `••••••••` + "Aguardando 1º acesso" ou "Já acessou";
   - trocar perfil, desativar/reativar e **excluir** (dupla validação: confirmar e depois digitar o e-mail
     da pessoa). Excluir apaga o acesso do Supabase Auth; ninguém exclui o próprio acesso.
+- **Atas de reunião** (`/atas`, botão *Atas* ao lado de *Novo evento*):
+  - bloco de notas das reuniões: título, data, participantes, **resumo** (decisões) e o texto livre do que foi discutido;
+  - todo usuário ativo **lê**; só Admin cria, edita, **fixa no topo** e exclui (garantido pelo RLS da tabela `atas`);
+  - busca por título, participante ou assunto (sem diferenciar acento);
+  - a ata pode ser ligada a um evento do calendário: no dia, o evento ganha o botão 📝 (ver ou escrever a ata);
+  - autor e último editor são gravados pelo próprio banco; fechar o formulário com texto não salvo pede confirmação.
 - **Primeiro acesso**: quem entra com senha provisória vê a tela *Crie sua senha* (nova senha + confirmação)
   antes de liberar o calendário.
 

@@ -3,7 +3,7 @@
   color-scheme:light;
   --bg:#eceef2; --frame:#f6f7f9; --cell:#ffffff; --cell-empty:transparent; --line:#dcdfe5;
   --text:#1c2028; --muted:#5f6672; --faint:#9aa1ad; --hover:#f1f3f7;
-  --culto:#3a6be0; --evento:#d99a12; --feriado:#dc3f3f; --aniv:#c93f88; --data:#278f62;
+  --culto:#3a6be0; --evento:#d99a12; --feriado:#dc3f3f; --aniv:#c93f88; --data:#278f62; --reuniao:#6b4fd1; --ensaio:#0f8a9c;
   --azul:#2c6bd6; --rosa:#db4f95; --amarelo:#d9a514; --verde:#278f62;
   --ok:#1f8a57; --warn:#b7790f;
 }
@@ -12,7 +12,7 @@
     color-scheme:dark;
     --bg:#161618; --frame:#1d1d20; --cell:#242427; --line:#313136;
     --text:#ececef; --muted:#a1a1a9; --faint:#6b6b74; --hover:#2b2b2f;
-    --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f;
+    --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f; --reuniao:#a08bff; --ensaio:#3cc6d9;
     --azul:#5b8cff; --rosa:#f27ab7; --amarelo:#f2c53c; --verde:#4cc58f;
     --ok:#4cc58f; --warn:#f2bd3c;
   }
@@ -21,7 +21,7 @@
   color-scheme:dark;
   --bg:#161618; --frame:#1d1d20; --cell:#242427; --line:#313136;
   --text:#ececef; --muted:#a1a1a9; --faint:#6b6b74; --hover:#2b2b2f;
-  --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f;
+  --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f; --reuniao:#a08bff; --ensaio:#3cc6d9;
   --azul:#5b8cff; --rosa:#f27ab7; --amarelo:#f2c53c; --verde:#4cc58f;
   --ok:#4cc58f; --warn:#f2bd3c;
 }
@@ -244,6 +244,22 @@ a.btn{text-decoration:none;color:inherit}
 .cred dt{color:var(--muted);font-size:13px;font-weight:600}
 .cred dd{margin:0;word-break:break-all}
 .cred code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;background:var(--cell);border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+
+/* ---------- Atas de reunião (/atas) ---------- */
+.atas-busca{display:block;margin:0 0 4px}
+.atas-busca input{max-width:420px}
+.atas-lista .card{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;display:block}
+.atas-lista .card:hover{border-color:var(--faint)}
+.atas-lista .card:focus-visible{outline:2px solid var(--culto);outline-offset:2px}
+.atas-lista .card.fixada{border-color:var(--text)}
+.atas-lista .resumo{margin:8px 0 0;font-size:14px;color:var(--text);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.atas-lista .resumo.vazio{color:var(--muted)}
+.ata-ler h3{font-size:12.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px}
+.ata-ler h3:first-child{margin-top:4px}
+.ata-ler .bloco{background:var(--cell);border:1px solid var(--line);border-radius:12px;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:15px}
+.ata-ler .by{color:var(--faint);font-size:12.5px;margin-top:14px}
+.ata-texto{min-height:260px;resize:vertical;line-height:1.5}
+.items .ata{font-size:15px}
 
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--frame);padding:11px 16px;border-radius:12px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:.2s;z-index:100;max-width:calc(100vw - 32px)}
 .toast.show{opacity:1;transform:translateX(-50%)}

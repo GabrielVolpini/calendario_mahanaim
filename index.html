@@ -48,6 +48,7 @@
     <div class="actions">
       <button class="btn" id="btnRequests" hidden>Solicitações <span class="cnt" id="reqCount" hidden></span></button>
       <a class="btn" id="btnUsers" href="/users" hidden>Usuários</a>
+      <a class="btn" id="btnAtas" href="/atas">Atas</a>
       <button class="btn primary" id="btnNew"></button>
       <details class="menu" id="userMenu">
         <summary><span class="avatar" id="avatar"></span><span class="who" id="whoName"></span></summary>
@@ -116,7 +117,65 @@
       </table>
     </div>
   </section>
+
+  <!-- ================= TELA: ATAS DE REUNIÃO (/atas) ================= -->
+  <section class="frame" id="atasPage" aria-labelledby="atasTitle" hidden>
+    <div class="top users-top">
+      <div class="users-head">
+        <button class="btn primary" id="aNew" hidden><span aria-hidden="true">+</span> Nova ata</button>
+        <div>
+          <p class="brand">Igreja Internacional Mahanaim</p>
+          <h1 id="atasTitle">Atas de reunião</h1>
+        </div>
+      </div>
+      <a class="btn ghost" href="/" id="aBack">‹ Voltar ao calendário</a>
+    </div>
+    <p class="users-sub" id="atasSub"></p>
+    <label class="atas-busca"><span class="sr">Buscar nas atas</span><input type="search" id="aBusca" placeholder="Buscar por título, participante ou assunto…" autocomplete="off"></label>
+    <div class="cards atas-lista" id="atasList"></div>
+  </section>
 </main>
+
+<!-- ================= DIÁLOGO: LER ATA ================= -->
+<dialog id="ataDlg" class="wide" aria-labelledby="ataTitle">
+  <div class="dlg-head">
+    <div><h2 id="ataTitle"></h2><p id="ataSub"></p></div>
+    <button class="iconbtn" data-close aria-label="Fechar">✕</button>
+  </div>
+  <div class="dlg-body ata-ler" id="ataBody"></div>
+  <div class="dlg-foot">
+    <button type="button" class="btn danger left" id="ataDel" hidden>Excluir</button>
+    <button type="button" class="btn" id="ataPin" hidden></button>
+    <button type="button" class="btn" id="ataGoto" hidden>Ver no calendário</button>
+    <button type="button" class="btn primary" id="ataEdit" hidden>Editar</button>
+  </div>
+</dialog>
+
+<!-- ================= DIÁLOGO: NOVA / EDITAR ATA ================= -->
+<dialog id="ataFormDlg" class="wide" aria-labelledby="ataFormTitle" data-sticky>
+  <form id="ataForm" novalidate>
+    <div class="dlg-head">
+      <div><h2 id="ataFormTitle"></h2><p id="ataFormSub"></p></div>
+      <button type="button" class="iconbtn" id="afX" aria-label="Fechar">✕</button>
+    </div>
+    <div class="dlg-body">
+      <label class="field"><span>Título</span><input id="afTitulo" maxlength="120" placeholder="Ex.: Reunião de liderança – planejamento de dezembro"></label>
+      <div class="row2">
+        <label class="field"><span>Data da reunião</span><input type="date" id="afData"></label>
+        <label class="field"><span>Evento no calendário <small>(opcional)</small></span><select id="afEvento"></select></label>
+      </div>
+      <label class="field"><span>Participantes <small>(opcional)</small></span><input id="afPart" maxlength="500" placeholder="Ex.: Pr. João, Maria, Equipe de louvor"></label>
+      <label class="field"><span>Resumo <small>(decisões e próximos passos)</small></span><textarea id="afResumo" maxlength="1000" rows="3" placeholder="O que ficou decidido, em poucas linhas. Aparece na lista de atas."></textarea></label>
+      <label class="field"><span>O que foi discutido</span><textarea id="afConteudo" class="ata-texto" maxlength="50000" rows="14" placeholder="Escreva livremente: pauta, discussões, responsáveis, prazos…"></textarea></label>
+      <label class="check"><input type="checkbox" id="afFixada"> Fixar no topo da lista</label>
+      <p class="err" id="afErr" hidden></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn ghost" id="afCancel">Cancelar</button>
+      <button type="submit" class="btn primary" id="afSubmit">Salvar ata</button>
+    </div>
+  </form>
+</dialog>
 
 <!-- ================= DIÁLOGO: DIA ================= -->
 <dialog id="dayDlg" aria-labelledby="dayTitle">

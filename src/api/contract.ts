@@ -6,7 +6,7 @@
 // O TypeScript garante que nada fique faltando.
 // =====================================================================
 import type {
-  AnoMes, Campanhas, Escopo, Evento, EventoDados, Solicitacao, SolicitacaoView, Usuario,
+  AnoMes, Ata, AtaDados, Campanhas, Escopo, Evento, EventoDados, Solicitacao, SolicitacaoView, Usuario,
 } from '../domain/types';
 import type { AtualizarUsuarioInput, CampanhaInput, NovoUsuarioInput, TrocaSenhaInput } from '../domain/schemas';
 
@@ -34,6 +34,12 @@ export interface CalendarApi {
   // Campanhas do mês (gravar: só admin)
   listCampaigns(): Promise<Campanhas>;
   saveCampaign(mes: AnoMes, campanha: CampanhaInput | null): Promise<Campanhas>;
+
+  // Atas de reunião (ler: qualquer usuário ativo; gravar e excluir: só admin)
+  listMinutes(): Promise<Ata[]>;
+  createMinute(dados: AtaDados): Promise<Ata>;
+  updateMinute(id: string, dados: AtaDados): Promise<Ata>;
+  deleteMinute(id: string): Promise<void>;
 
   // Usuários (só admin)
   listUsers(): Promise<Usuario[]>;
