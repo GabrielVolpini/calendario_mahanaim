@@ -18,14 +18,14 @@ import { z } from 'zod';
 import type { CalendarApi } from './contract';
 import type { Database } from './database.types';
 import { ApiError } from './errors';
-import { limpo, validar } from './comum';
+import { ataLimpa, limpo, validar } from './comum';
 import {
-  AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
+  AtaInput, AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
   NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
   CORES_CAMPANHA, ESCOPOS, ESPACOS, NOME_UNIDADE, UNIDADES,
-  type Campanhas, type Espaco, type Unidade, type Categoria, type CorCampanha, type Evento, type EventoDados,
+  type Ata, type AtaDados, type Campanhas, type Espaco, type Unidade, type Categoria, type CorCampanha, type Evento, type EventoDados,
   type Solicitacao, type SolicitacaoView, type StatusSolicitacao, type Usuario,
 } from '../domain/types';
 
@@ -136,6 +136,19 @@ const paraUsuario = (r: LinhaPerfil): Usuario => ({
 });
 
 const COLUNAS_EVENTO = 'id, titulo, tipo, data_inicio, data_fim, hora_inicio, observacao, espaco, serie_id, local_id, locais(nome)' as const;
+const COLUNAS_ATA = 'id, titulo, data_reuniao, participantes, resumo, conteudo, fixada, evento_id, criado_por_nome, atualizado_por_nome, criado_em, atualizado_em' as const;
+type LinhaAta = Pick<Database['public']['Tables']['atas']['Row'],
+  'id' | 'titulo' | 'data_reuniao' | 'participantes' | 'resumo' | 'conteudo' | 'fixada' | 'evento_id' | 'criado_por_nome' | 'atualizado_por_nome' | 'criado_em' | 'atualizado_em'>;
+const paraAta = (r: LinhaAta): Ata => ({
+  id: r.id, titulo: r.titulo, data: r.data_reuniao, participantes: opc(r.participantes), resumo: opc(r.resumo),
+  conteudo: r.conteudo, fixada: r.fixada, eventoId: opc(r.evento_id),
+  autorNome: opc(r.criado_por_nome), editorNome: opc(r.atualizado_por_nome), criadoEm: r.criado_em, atualizadoEm: r.atualizado_em,
+});
+/** Campos da tela → colunas do banco (autor e datas o próprio banco preenche). */
+const colunasAta = (a: AtaDados) => ({
+  titulo: a.titulo, data_reuniao: a.data, participantes: a.participantes ?? null, resumo: a.resumo ?? null,
+  conteudo: a.conteudo, fixada: a.fixada, evento_id: a.eventoId ?? null,
+});
 const PAGINA = 1000; // limite padrão de linhas por requisição no Supabase
 
 export function createSupabaseApi(url: string, chave: string): CalendarApi {
@@ -382,6 +395,29 @@ export function createSupabaseApi(url: string, chave: string): CalendarApi {
         ok(await sb.from('campanhas').upsert({ ano, mes: m, nome: c.n, descricao: c.s || null, cor: c.c }));
       }
       return campanhas();
+    },
+
+    // -------- Atas de reunião --------
+    async listMinutes() {
+      await exigirUsuario();
+      return exigir(await sb.from('atas').select(COLUNAS_ATA)
+        .order('fixada', { ascending: false }).order('data_reuniao', { ascending: false }).order('criado_em', { ascending: false })).map(paraAta);
+    },
+    async createMinute(dados) {
+      await exigirUsuario();
+      const a = ataLimpa(validar(AtaInput, dados));
+      return paraAta(exigir(await sb.from('atas').insert(colunasAta(a)).select(COLUNAS_ATA).single()));
+    },
+    async updateMinute(id, dados) {
+      await exigirUsuario();
+      const a = ataLimpa(validar(AtaInput, dados));
+      const r = ok(await sb.from('atas').update(colunasAta(a)).eq('id', validar(idSchema, id)).select(COLUNAS_ATA).maybeSingle());
+      if (!r) throw new ApiError('NAO_ENCONTRADO', 'Ata não encontrada.');
+      return paraAta(r);
+    },
+    async deleteMinute(id) {
+      await exigirUsuario();
+      ok(await sb.from('atas').delete().eq('id', validar(idSchema, id)));
     },
 
     // -------- Usuários --------

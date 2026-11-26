@@ -245,6 +245,22 @@ a.btn{text-decoration:none;color:inherit}
 .cred dd{margin:0;word-break:break-all}
 .cred code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;background:var(--cell);border:1px solid var(--line);border-radius:8px;padding:2px 8px}
 
+/* ---------- Atas de reunião (/atas) ---------- */
+.atas-busca{display:block;margin:0 0 4px}
+.atas-busca input{max-width:420px}
+.atas-lista .card{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%;display:block}
+.atas-lista .card:hover{border-color:var(--faint)}
+.atas-lista .card:focus-visible{outline:2px solid var(--culto);outline-offset:2px}
+.atas-lista .card.fixada{border-color:var(--text)}
+.atas-lista .resumo{margin:8px 0 0;font-size:14px;color:var(--text);white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.atas-lista .resumo.vazio{color:var(--muted)}
+.ata-ler h3{font-size:12.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px}
+.ata-ler h3:first-child{margin-top:4px}
+.ata-ler .bloco{background:var(--cell);border:1px solid var(--line);border-radius:12px;padding:12px 14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:15px}
+.ata-ler .by{color:var(--faint);font-size:12.5px;margin-top:14px}
+.ata-texto{min-height:260px;resize:vertical;line-height:1.5}
+.items .ata{font-size:15px}
+
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--frame);padding:11px 16px;border-radius:12px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:.2s;z-index:100;max-width:calc(100vw - 32px)}
 .toast.show{opacity:1;transform:translateX(-50%)}
 .toast.bad{background:var(--feriado);color:#fff}

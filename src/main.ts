@@ -3,10 +3,10 @@
 // =====================================================================
 import './styles.css';
 import { BANCO_NAO_CONFIGURADO, MODO_DEMO, api, isApiError, mensagemDoErro } from './api';
-import { EventoInput, NovoUsuarioInput, TrocaSenhaInput, primeiraMensagem } from './domain/schemas';
+import { AtaInput, EventoInput, NovoUsuarioInput, TrocaSenhaInput, primeiraMensagem } from './domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA, ESPACOS_DA_UNIDADE, NOME_ESPACO, NOME_UNIDADE, UNIDADES,
-  type AnoMes, type Campanhas, type Categoria, type CorCampanha, type DataIso, type Escopo,
+  type AnoMes, type Ata, type AtaDados, type Campanhas, type Categoria, type CorCampanha, type DataIso, type Escopo,
   type Evento, type EventoDados, type SolicitacaoView, type StatusSolicitacao, type Usuario,
 } from './domain/types';
 import { $, $$, html, raw, setHtml, type SafeHtml } from './ui/dom';
@@ -54,6 +54,7 @@ let ME: Usuario | null = null;
 let EVENTS: Evento[] = [];
 let REQS: SolicitacaoView[] = [];
 let CAMPS: Campanhas = {};
+let ATAS: Ata[] = [];
 let IDX: Record<DataIso, ItemDia[]> = {};
 let cur: Mes = { ...START };
 let view: 'cal' | 'list' = 'cal';
@@ -107,7 +108,7 @@ function buildIndex(): void {
 const eventsOf = (k: DataIso) => (IDX[k] ?? []).filter(e => active.has(e.c)).sort(cmp);
 
 async function loadData(): Promise<void> {
-  [EVENTS, REQS, CAMPS] = await Promise.all([api.listEvents(), api.listRequests(), api.listCampaigns()]);
+  [EVENTS, REQS, CAMPS, ATAS] = await Promise.all([api.listEvents(), api.listRequests(), api.listCampaigns(), api.listMinutes()]);
   buildIndex();
   const pend = REQS.filter(r => r.status === 'pendente').length;
   const rc = $('#reqCount');
@@ -173,6 +174,7 @@ async function enterApp(): Promise<void> {
   role.className = 'badge' + (adm ? ' admin' : '');
   $('#btnRequests').hidden = !adm;
   $('#btnUsers').hidden = !adm;
+  $('#aNew').hidden = !adm;
   $('#mMine').hidden = adm;
   $('#mReset').hidden = !adm || !MODO_DEMO;
   const [longo, curto] = adm ? ['Novo evento', 'Novo'] : ['Solicitar evento', 'Solicitar'];
@@ -227,10 +229,13 @@ pw.form.addEventListener('submit', async ev => {
 $('#pwdLogout').addEventListener('click', async () => { await api.logout(); showLogin(); });
 
 // =====================================================================
-// ROTAS: "/" = calendário · "/users" = usuários (só admin)
+// ROTAS: "/" = calendário · "/users" = usuários (só admin) · "/atas" = atas de reunião
 // =====================================================================
-const ROTA_USUARIOS = '/users';
-const naRotaUsuarios = () => location.pathname.replace(/\/+$/, '') === ROTA_USUARIOS;
+type Pagina = 'cal' | 'users' | 'atas';
+function paginaAtual(): Pagina {
+  const p = location.pathname.replace(/\/+$/, '');
+  return p === '/users' ? 'users' : p === '/atas' ? 'atas' : 'cal';
+}
 
 function navegar(caminho: string): void {
   if (location.pathname !== caminho) history.pushState(null, '', caminho);
@@ -238,23 +243,28 @@ function navegar(caminho: string): void {
 }
 function aplicarRota(): void {
   if (!ME || $('#appScreen').hidden) return;
-  let usuarios = naRotaUsuarios();
-  if (usuarios && !isAdmin()) {
+  let pagina = paginaAtual();
+  if (pagina === 'users' && !isAdmin()) {
     history.replaceState(null, '', '/');
-    usuarios = false;
+    pagina = 'cal';
     toast('A tela de usuários é só para administradores.', true);
   }
   closeAll();
-  $('#calPage').hidden = usuarios;
-  $('#usersPage').hidden = !usuarios;
-  $('#btnNew').hidden = usuarios;
-  const link = $('#btnUsers');
-  if (usuarios) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-  document.title = usuarios ? 'Usuários · Calendário Mahanaim' : 'Calendário Mahanaim';
-  if (usuarios) void renderUsers();
+  $('#calPage').hidden = pagina !== 'cal';
+  $('#usersPage').hidden = pagina !== 'users';
+  $('#atasPage').hidden = pagina !== 'atas';
+  $('#btnNew').hidden = pagina !== 'cal';
+  for (const [id, pg] of [['#btnUsers', 'users'], ['#btnAtas', 'atas']] as const) {
+    const link = $(id);
+    if (pagina === pg) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+  }
+  const titulos: Record<Pagina, string> = { cal: '', users: 'Usuários · ', atas: 'Atas de reunião · ' };
+  document.title = titulos[pagina] + 'Calendário Mahanaim';
+  if (pagina === 'users') void renderUsers();
+  if (pagina === 'atas') renderAtas();
 }
 window.addEventListener('popstate', aplicarRota);
-$$<HTMLAnchorElement>('#btnUsers, #uBack').forEach(a => a.addEventListener('click', e => {
+$$<HTMLAnchorElement>('#btnUsers, #uBack, #btnAtas, #aBack').forEach(a => a.addEventListener('click', e => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // abrir em nova aba continua funcionando
   e.preventDefault();
   navegar(a.getAttribute('href') ?? '/');
@@ -427,7 +437,15 @@ function openDay(k: DataIso): void {
     ? html`${list.map((e, i) => {
         let acts: SafeHtml = raw('');
         if (e.pend) acts = adm ? html`<button class="btn sm" data-review="${i}">Revisar</button>` : raw('<span class="badge pendente">Pendente</span>');
-        else if (adm) acts = html`<button class="iconbtn sm" data-edit="${i}" aria-label="Editar ${e.n}" title="Editar">✎</button><button class="iconbtn sm" data-del="${i}" aria-label="Excluir ${e.n}" title="Excluir">🗑</button>`;
+        else {
+          const temAta = !!(e.id && ataDoEvento(e.id));
+          const ata = temAta || (adm && e.c === 'reuniao')
+            ? html`<button class="iconbtn sm ata" data-ata="${i}" aria-label="${temAta ? 'Ver ata de' : 'Escrever ata de'} ${e.n}" title="${temAta ? 'Ver ata' : 'Escrever ata'}">📝</button>`
+            : '';
+          acts = adm
+            ? html`${ata}<button class="iconbtn sm" data-edit="${i}" aria-label="Editar ${e.n}" title="Editar">✎</button><button class="iconbtn sm" data-del="${i}" aria-label="Excluir ${e.n}" title="Excluir">🗑</button>`
+            : html`${ata}`;
+        }
         const kind = e.pend ? `Aguardando aprovação · enviado por ${e.autor ?? '—'}` : CATS[e.c].label + (e.serie ? ' · recorrente' : '');
         return html`<li class="${e.pend ? 'pend' : ''}">${dot(e.c, e.pend)}<span class="t">${e.t ?? ''}</span><span class="n">${e.n}${sub(e) ? html`<span class="l">${sub(e)}</span>` : ''}<span class="k">${kind}</span></span><span class="acts">${acts}</span></li>`;
       })}`
@@ -439,6 +457,12 @@ function openDay(k: DataIso): void {
   }));
   $$('[data-del]', ul).forEach(b => b.addEventListener('click', () => {
     const e = evento(item(b, 'del')); if (e) void deleteEvent(e);
+  }));
+  $$('[data-ata]', ul).forEach(b => b.addEventListener('click', () => {
+    const e = evento(item(b, 'ata')); if (!e) return;
+    const a = ataDoEvento(e.id);
+    if (a) openAta(a);
+    else if (isAdmin()) openAtaForm({ titulo: e.n, data: e.data, eventoId: e.id });
   }));
   $$('[data-review]', ul).forEach(b => b.addEventListener('click', () => { dayDlg.close(); openRequests('pendente'); }));
   const add = $<HTMLButtonElement>('#dayAdd');
@@ -900,6 +924,207 @@ $('#cRemove').addEventListener('click', async () => {
 });
 
 // =====================================================================
+// ATAS DE REUNIÃO — tela própria em /atas
+// Todos leem; só admin escreve, edita, fixa e exclui (o banco garante).
+// =====================================================================
+const ataDoEvento = (eventoId: string) => ATAS.find(a => a.eventoId === eventoId);
+/** Minúsculas e sem acento, para a busca achar "reuniao" em "Reunião". */
+const normalizar = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const fmtEventoCurto = (e: Evento) => (e.t ? `${e.t} · ` : '') + e.n;
+
+const atasBusca = $<HTMLInputElement>('#aBusca');
+atasBusca.addEventListener('input', () => renderAtas());
+
+function renderAtas(): void {
+  const total = ATAS.length, fixadas = ATAS.filter(a => a.fixada).length;
+  $('#atasSub').textContent = (total
+    ? `${total} ${total === 1 ? 'ata registrada' : 'atas registradas'}${fixadas ? ` · ${fixadas} ${fixadas === 1 ? 'fixada' : 'fixadas'}` : ''}. `
+    : '') + (isAdmin() ? 'Registre o que foi tratado em cada reunião para a liderança consultar depois.' : 'Consulte o que foi tratado nas reuniões da liderança.');
+  const termos = normalizar(atasBusca.value).split(/\s+/).filter(Boolean);
+  const lista = termos.length
+    ? ATAS.filter(a => { const t = normalizar([a.titulo, a.participantes, a.resumo, a.conteudo].join(' ')); return termos.every(x => t.includes(x)); })
+    : ATAS;
+  const box = $('#atasList');
+  if (!lista.length) {
+    setHtml(box, html`<p class="empty">${termos.length ? 'Nenhuma ata encontrada com essa busca.' : isAdmin() ? 'Nenhuma ata ainda. Clique em "+ Nova ata" para registrar a primeira reunião.' : 'Nenhuma ata registrada ainda.'}</p>`);
+    return;
+  }
+  setHtml(box, html`${lista.map(a => {
+    const ev = a.eventoId ? EVENTS.find(e => e.id === a.eventoId) : undefined;
+    const meta = [fmtDate(a.data), cap(diaDaSemana(a.data)), ev && fmtEventoCurto(ev)].filter(Boolean).join(' · ');
+    const previa = a.resumo ?? a.conteudo.slice(0, 400);
+    return html`<button type="button" class="card${a.fixada ? ' fixada' : ''}" data-ata-id="${a.id}">
+      <div class="head"><div><h3>${a.fixada ? raw('<span aria-label="Fixada" title="Fixada">📌</span>') : ''}${a.titulo}</h3><div class="meta">${meta}</div></div>${a.fixada ? raw('<span class="badge">Fixada</span>') : ''}</div>
+      <p class="resumo${previa ? '' : ' vazio'}">${previa || 'Sem texto.'}</p>
+      <div class="by">${a.autorNome ? `Escrita por ${a.autorNome}` : 'Registrada'} · ${a.atualizadoEm !== a.criadoEm ? `atualizada ${fmtWhen(a.atualizadoEm)}` : fmtWhen(a.criadoEm)}</div>
+    </button>`;
+  })}`);
+  $$<HTMLButtonElement>('[data-ata-id]', box).forEach(b => b.addEventListener('click', () => {
+    const a = ATAS.find(x => x.id === b.dataset['ataId']); if (a) openAta(a);
+  }));
+}
+
+/** Recarrega as atas do servidor e redesenha o que estiver aberto. */
+async function recarregarAtas(): Promise<void> {
+  ATAS = await api.listMinutes();
+  if (!$('#atasPage').hidden) renderAtas();
+  reopenDay();
+}
+
+// ---------- ler uma ata ----------
+const ataDlg = $<HTMLDialogElement>('#ataDlg');
+let ataAberta: Ata | null = null;
+
+function openAta(a: Ata): void {
+  ataAberta = a;
+  const adm = isAdmin();
+  const ev = a.eventoId ? EVENTS.find(e => e.id === a.eventoId) : undefined;
+  $('#ataTitle').textContent = (a.fixada ? '📌 ' : '') + a.titulo;
+  $('#ataSub').textContent = `${cap(diaDaSemana(a.data))}, ${fmtDate(a.data)}` + (ev ? ` · ${fmtEventoCurto(ev)}` : '');
+  const autoria = [a.autorNome && `Escrita por ${a.autorNome} em ${fmtWhen(a.criadoEm)}`,
+    a.atualizadoEm !== a.criadoEm && `Última edição${a.editorNome ? ` por ${a.editorNome}` : ''} em ${fmtWhen(a.atualizadoEm)}`].filter(Boolean).join(' · ');
+  setHtml($('#ataBody'), html`
+    ${a.participantes ? html`<h3>Participantes</h3><div class="bloco">${a.participantes}</div>` : ''}
+    ${a.resumo ? html`<h3>Resumo</h3><div class="bloco">${a.resumo}</div>` : ''}
+    ${a.conteudo ? html`<h3>O que foi discutido</h3><div class="bloco">${a.conteudo}</div>` : ''}
+    ${autoria ? html`<p class="by">${autoria}</p>` : ''}`);
+  $('#ataEdit').hidden = !adm;
+  $('#ataDel').hidden = !adm;
+  const pin = $<HTMLButtonElement>('#ataPin');
+  pin.hidden = !adm;
+  pin.textContent = a.fixada ? 'Desafixar' : '📌 Fixar';
+  $('#ataGoto').hidden = !ev;
+  if (!ataDlg.open) ataDlg.showModal();
+}
+
+const dadosDaAta = (a: Ata): AtaDados => ({
+  titulo: a.titulo, data: a.data, participantes: a.participantes, resumo: a.resumo, conteudo: a.conteudo, fixada: a.fixada, eventoId: a.eventoId,
+});
+
+$('#ataEdit').addEventListener('click', () => { if (ataAberta) openAtaForm(dadosDaAta(ataAberta), ataAberta.id); });
+$<HTMLButtonElement>('#ataPin').addEventListener('click', async ev => {
+  const a = ataAberta; if (!a) return;
+  const b = ev.currentTarget as HTMLButtonElement;
+  b.disabled = true;
+  try {
+    const nova = await api.updateMinute(a.id, { ...dadosDaAta(a), fixada: !a.fixada });
+    await recarregarAtas();
+    openAta(ATAS.find(x => x.id === nova.id) ?? nova);
+    toast(nova.fixada ? 'Ata fixada no topo.' : 'Ata desafixada.');
+  } catch (e) { falha(e); }
+  b.disabled = false;
+});
+$('#ataDel').addEventListener('click', async () => {
+  const a = ataAberta; if (!a) return;
+  const ok = await ask({ title: 'Excluir esta ata?', msg: `${a.titulo} · ${fmtShort(a.data)}. O texto será apagado de vez e não poderá ser recuperado.`, ok: 'Excluir ata', danger: true });
+  if (!ok) return;
+  try {
+    await api.deleteMinute(a.id);
+    ataDlg.close();
+    await recarregarAtas();
+    toast('Ata excluída.');
+  } catch (e) { falha(e); }
+});
+$('#ataGoto').addEventListener('click', () => {
+  const ev = ataAberta?.eventoId ? EVENTS.find(e => e.id === ataAberta?.eventoId) : undefined;
+  if (!ev) return;
+  const d = parseKey(ev.data), c = { y: d.getFullYear(), m: d.getMonth() };
+  navegar('/');
+  if (dentroDoPeriodo(c)) { cur = c; render(); }
+  openDay(ev.data);
+});
+
+// ---------- escrever / editar ----------
+const af = {
+  dlg: $<HTMLDialogElement>('#ataFormDlg'),
+  form: $<HTMLFormElement>('#ataForm'),
+  titulo: $<HTMLInputElement>('#afTitulo'),
+  data: $<HTMLInputElement>('#afData'),
+  evento: $<HTMLSelectElement>('#afEvento'),
+  part: $<HTMLInputElement>('#afPart'),
+  resumo: $<HTMLTextAreaElement>('#afResumo'),
+  conteudo: $<HTMLTextAreaElement>('#afConteudo'),
+  fixada: $<HTMLInputElement>('#afFixada'),
+  err: $('#afErr'),
+  submit: $<HTMLButtonElement>('#afSubmit'),
+};
+let ataEditId: string | null = null;
+let ataInicial = '';
+const valoresAta = () => ({
+  titulo: af.titulo.value, data: af.data.value, eventoId: af.evento.value, participantes: af.part.value,
+  resumo: af.resumo.value, conteudo: af.conteudo.value, fixada: af.fixada.checked,
+});
+const ataAlterada = () => JSON.stringify(valoresAta()) !== ataInicial;
+
+/** Eventos do dia escolhido (Reuniões primeiro) para ligar a ata. Mantém o atual, se houver. */
+function preencherEventosDaAta(atual = af.evento.value): void {
+  const dia = af.data.value;
+  const doDia = dia ? EVENTS.filter(e => e.data === dia || (!!e.fim && e.data <= dia && dia <= e.fim)) : [];
+  doDia.sort((a, b) => Number(b.c === 'reuniao') - Number(a.c === 'reuniao') || minutos(a.t) - minutos(b.t));
+  const extra = atual && !doDia.some(e => e.id === atual) ? EVENTS.find(e => e.id === atual) : undefined;
+  setHtml(af.evento, html`<option value="">${doDia.length ? 'Nenhum' : dia ? 'Nenhum evento neste dia' : 'Escolha a data primeiro'}</option>
+    ${doDia.map(e => html`<option value="${e.id}">${fmtEventoCurto(e)}${e.c === 'reuniao' ? '' : ` (${CATS[e.c].one})`}</option>`)}
+    ${extra ? html`<option value="${extra.id}">${fmtShort(extra.data)} · ${fmtEventoCurto(extra)}</option>` : ''}`);
+  af.evento.value = doDia.some(e => e.id === atual) || extra ? atual : '';
+}
+af.data.addEventListener('change', () => preencherEventosDaAta());
+
+function openAtaForm(base: Partial<AtaDados> = {}, id: string | null = null): void {
+  ataEditId = id;
+  $('#ataFormTitle').textContent = id ? 'Editar ata' : 'Nova ata de reunião';
+  $('#ataFormSub').textContent = id ? 'As alterações ficam registradas com seu nome.' : 'Fica salva para a liderança consultar quando precisar.';
+  af.titulo.value = base.titulo ?? '';
+  af.data.value = base.data ?? hojeKey();
+  preencherEventosDaAta(base.eventoId ?? '');
+  af.part.value = base.participantes ?? '';
+  af.resumo.value = base.resumo ?? '';
+  af.conteudo.value = base.conteudo ?? '';
+  af.fixada.checked = base.fixada ?? false;
+  af.err.hidden = true;
+  af.submit.disabled = false;
+  ataInicial = JSON.stringify(valoresAta());
+  if (ataDlg.open) ataDlg.close();
+  af.dlg.showModal();
+  setTimeout(() => (af.titulo.value ? af.conteudo : af.titulo).focus(), 0);
+}
+$('#aNew').addEventListener('click', () => openAtaForm());
+
+/** Fecha o formulário; se houver texto não salvo, pergunta antes. */
+async function fecharAtaForm(): Promise<void> {
+  if (ataAlterada()) {
+    const ok = await ask({ title: 'Descartar o que foi escrito?', msg: 'As alterações desta ata ainda não foram salvas.', ok: 'Descartar', danger: true });
+    if (!ok) return;
+  }
+  af.dlg.close();
+}
+$('#afCancel').addEventListener('click', () => void fecharAtaForm());
+$('#afX').addEventListener('click', () => void fecharAtaForm());
+af.dlg.addEventListener('cancel', e => { e.preventDefault(); void fecharAtaForm(); }); // tecla Esc
+window.addEventListener('beforeunload', e => { if (af.dlg.open && ataAlterada()) e.preventDefault(); });
+
+af.form.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  if (af.submit.disabled) return;
+  af.err.hidden = true;
+  const v = AtaInput.safeParse(valoresAta());
+  if (!v.success) { af.err.textContent = primeiraMensagem(v.error); af.err.hidden = false; return; }
+  af.submit.disabled = true;
+  try {
+    const salva = ataEditId ? await api.updateMinute(ataEditId, v.data) : await api.createMinute(v.data);
+    af.dlg.close();
+    await recarregarAtas();
+    toast(ataEditId ? 'Ata atualizada.' : 'Ata salva.');
+    openAta(ATAS.find(x => x.id === salva.id) ?? salva);
+  } catch (e) {
+    af.err.textContent = mensagemDoErro(e);
+    af.err.hidden = false;
+    if (isApiError(e) && e.codigo === 'NAO_AUTENTICADO') showLogin();
+  } finally {
+    af.submit.disabled = false;
+  }
+});
+
+// =====================================================================
 // NAVEGAÇÃO E INÍCIO
 // =====================================================================
 const step = (n: number) => { cur = fromIdx(Math.min(TOTAL - 1, Math.max(0, idx(cur) + n))); render(); };
@@ -915,7 +1140,7 @@ $('#vCal').addEventListener('click', () => setView('cal'));
 $('#vList').addEventListener('click', () => setView('list'));
 $$<HTMLDialogElement>('dialog').forEach(d => {
   $$('[data-close]', d).forEach(b => b.addEventListener('click', () => d.close()));
-  d.addEventListener('click', e => { if (e.target === d) d.close(); });
+  d.addEventListener('click', e => { if (e.target === d && !d.hasAttribute('data-sticky')) d.close(); });
 });
 function closeAll(): void { $$<HTMLDialogElement>('dialog[open]').forEach(d => d.close()); }
 document.addEventListener('keydown', e => {

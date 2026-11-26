@@ -11,6 +11,24 @@ export type Database = {
   };
   public: {
     Tables: {
+      atas: {
+        Row: {
+          atualizado_em: string; atualizado_por: string | null; atualizado_por_nome: string | null; conteudo: string;
+          criado_em: string; criado_por: string | null; criado_por_nome: string | null; data_reuniao: string;
+          evento_id: string | null; fixada: boolean; id: string; participantes: string | null; resumo: string | null; titulo: string;
+        };
+        Insert: {
+          atualizado_em?: string; atualizado_por?: string | null; atualizado_por_nome?: string | null; conteudo?: string;
+          criado_em?: string; criado_por?: string | null; criado_por_nome?: string | null; data_reuniao: string;
+          evento_id?: string | null; fixada?: boolean; id?: string; participantes?: string | null; resumo?: string | null; titulo: string;
+        };
+        Update: {
+          atualizado_em?: string; atualizado_por?: string | null; atualizado_por_nome?: string | null; conteudo?: string;
+          criado_em?: string; criado_por?: string | null; criado_por_nome?: string | null; data_reuniao?: string;
+          evento_id?: string | null; fixada?: boolean; id?: string; participantes?: string | null; resumo?: string | null; titulo?: string;
+        };
+        Relationships: [];
+      };
       campanhas: {
         Row: { ano: number; cor: string; descricao: string | null; mes: number; nome: string };
         Insert: { ano: number; cor?: string; descricao?: string | null; mes: number; nome: string };

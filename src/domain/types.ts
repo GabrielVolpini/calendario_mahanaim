@@ -118,3 +118,27 @@ export interface Campanha {
 }
 
 export type Campanhas = Record<AnoMes, Campanha>;
+
+/** Campos de uma ata de reunião que o admin preenche. */
+export interface AtaDados {
+  titulo: string;
+  /** data da reunião */
+  data: DataIso;
+  participantes?: string | undefined;
+  /** resumo curto: decisões e encaminhamentos */
+  resumo?: string | undefined;
+  /** texto livre do que foi discutido (com quebras de linha) */
+  conteudo: string;
+  fixada: boolean;
+  /** evento do calendário a que a ata pertence (normalmente uma Reunião) */
+  eventoId?: string | undefined;
+}
+
+export interface Ata extends AtaDados {
+  id: string;
+  autorNome?: string | undefined;
+  editorNome?: string | undefined;
+  /** data e hora ISO */
+  criadoEm: string;
+  atualizadoEm: string;
+}

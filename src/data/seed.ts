@@ -5,7 +5,7 @@
 // compartilham o campo `serie`, o que permite editar "somente este dia"
 // ou "este e os próximos".
 // =====================================================================
-import type { Campanhas, Categoria, Evento, Solicitacao, Usuario } from '../domain/types';
+import type { Ata, Campanhas, Categoria, Evento, Solicitacao, Usuario } from '../domain/types';
 
 /** Usuário como guardado no protótipo. No banco real, NUNCA guardar a senha: só o hash. */
 export interface UsuarioDemo extends Usuario {
@@ -17,6 +17,7 @@ export interface Banco {
   campanhas: Campanhas;
   users: UsuarioDemo[];
   requests: Solicitacao[];
+  atas: Ata[];
   seq: number;
 }
 
@@ -148,6 +149,13 @@ export function criarBancoDemo(): Banco {
       { id: 'r3', status: 'recusada', autorId: 'u2', criadoEm: '2026-11-10T08:45:00',
         evento: { data: '2026-11-20', c: 'evento', n: 'Bazar beneficente', t: '9h', un: SA },
         motivo: 'Feriado: prédio fechado. Que tal 28/11?', revisadoPor: 'u1', revisadoEm: '2026-11-11T09:00:00' },
+    ],
+    atas: [
+      { id: 'a1', titulo: 'Reunião de liderança: planejamento do Natal', data: '2026-11-10', fixada: true,
+        participantes: 'Pastor, Administrador Demo, Líder de Louvor, Membro Demo',
+        resumo: 'Cantata de Natal confirmada para 20/12. Ensaios aos sábados às 15h a partir de 21/11.',
+        conteudo: 'Abertura com oração.\n\n1. Cantata de Natal\n- Data confirmada: 20/12, no culto da noite.\n- O ministério de louvor fica responsável pelo repertório.\n\n2. Ensaios\n- Sábados às 15h, a partir de 21/11, no templo de Santo André.\n\n3. Próximos passos\n- Divulgar no culto de domingo.\n- Rever a escala de recepção.',
+        autorNome: 'Administrador Demo', editorNome: 'Administrador Demo', criadoEm: '2026-11-10T21:30:00', atualizadoEm: '2026-11-10T21:30:00' },
     ],
     seq: 1000,
   };

@@ -6,15 +6,15 @@
 import { z } from 'zod';
 import type { CalendarApi } from './contract';
 import { ApiError } from './errors';
-import { limpo, validar } from './comum';
+import { ataLimpa, limpo, validar } from './comum';
 import { criarBancoDemo, type Banco, type UsuarioDemo } from '../data/seed';
 import {
-  AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
+  AtaInput, AtualizarUsuarioInput, CampanhaInput, EventoInput, LoginInput, MotivoInput,
   NovoUsuarioInput, SolicitacaoInput, TrocaSenhaInput, anoMes, id as idSchema,
 } from '../domain/schemas';
 import {
   CATEGORIAS, CORES_CAMPANHA, ESCOPOS, ESPACOS, NOME_UNIDADE, PERFIS, STATUS_SOLICITACAO, UNIDADES,
-  type Escopo, type Evento, type Usuario,
+  type Ata, type Escopo, type Evento, type Usuario,
 } from '../domain/types';
 
 const DB_KEY = 'mahanaim.db.v2';
@@ -46,6 +46,10 @@ const BancoSalvo = z.object({
     evento: EventoSalvo.omit({ id: true, serie: true }),
     mensagem: opt, motivo: opt, revisadoPor: opt, revisadoEm: opt, eventoId: opt,
   })),
+  atas: z.array(z.object({
+    id: z.string(), titulo: z.string(), data: z.string(), participantes: opt, resumo: opt, conteudo: z.string(),
+    fixada: z.boolean(), eventoId: opt, autorNome: opt, editorNome: opt, criadoEm: z.string(), atualizadoEm: z.string(),
+  })).default([]), // dados salvos antes das atas existirem
   seq: z.number().int(),
 });
 const SessaoSalva = z.object({ userId: z.string(), criadaEm: z.number(), expira: z.number().nullable() });
@@ -198,6 +202,8 @@ export function createMockApi(): CalendarApi {
       db.events = esc === 'proximos' && atual.serie
         ? db.events.filter(x => !(x.serie === atual.serie && x.data >= atual.data))
         : db.events.filter(x => x.id !== atual.id);
+      const restantes = new Set(db.events.map(x => x.id));
+      for (const a of db.atas) if (a.eventoId && !restantes.has(a.eventoId)) delete a.eventoId;
       salvar();
       return responder(undefined);
     },
@@ -258,6 +264,35 @@ export function createMockApi(): CalendarApi {
       else db.campanhas[ym] = validar(CampanhaInput, campanha);
       salvar();
       return responder(db.campanhas);
+    },
+
+    // -------- Atas de reunião --------
+    async listMinutes() {
+      exigirUsuario();
+      const ordem = (a: Ata, b: Ata) => Number(b.fixada) - Number(a.fixada) || b.data.localeCompare(a.data) || b.criadoEm.localeCompare(a.criadoEm);
+      return responder([...db.atas].sort(ordem));
+    },
+    async createMinute(dados) {
+      const admin = exigirAdmin();
+      const a: Ata = { id: novoId('a'), ...ataLimpa(validar(AtaInput, dados)), autorNome: admin.nome, editorNome: admin.nome, criadoEm: agora(), atualizadoEm: agora() };
+      db.atas.push(a); salvar();
+      return responder(a);
+    },
+    async updateMinute(id, dados) {
+      const admin = exigirAdmin();
+      const atual = db.atas.find(x => x.id === validar(idSchema, id));
+      if (!atual) throw new ApiError('NAO_ENCONTRADO', 'Ata não encontrada.');
+      const nova: Ata = { ...ataLimpa(validar(AtaInput, dados)), id: atual.id, autorNome: atual.autorNome, criadoEm: atual.criadoEm, editorNome: admin.nome, atualizadoEm: agora() };
+      db.atas = db.atas.map(x => (x.id === atual.id ? nova : x));
+      salvar();
+      return responder(nova);
+    },
+    async deleteMinute(id) {
+      exigirAdmin();
+      const alvo = validar(idSchema, id);
+      if (!db.atas.some(x => x.id === alvo)) throw new ApiError('NAO_ENCONTRADO', 'Ata não encontrada.');
+      db.atas = db.atas.filter(x => x.id !== alvo); salvar();
+      return responder(undefined);
     },
 
     // -------- Usuários --------

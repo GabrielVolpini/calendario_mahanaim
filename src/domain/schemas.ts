@@ -136,6 +136,33 @@ export const CampanhaInput = z.strictObject({
 });
 export type CampanhaInput = z.input<typeof CampanhaInput>;
 
+/** Texto longo com várias linhas (atas): só bloqueia caracteres de controle invisíveis.
+ *  Aqui < > são permitidos porque a tela sempre exibe o texto escapado. */
+const MULTILINHA = /^[^\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]*$/;
+const MSG_INVISIVEL = 'O texto tem caracteres especiais invisíveis. Apague-os e tente de novo.';
+const textoLongo = (campo: string, max: number) =>
+  z.preprocess(v => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n') : v ?? ''), z
+    .string()
+    .max(max, `${capitalizar(campo)}: máximo de ${max} caracteres.`)
+    .regex(MULTILINHA, MSG_INVISIVEL)
+    .transform(v => v.replace(/^\s*\n|\s+$/g, '')));
+const textoLongoOpcional = (campo: string, max: number) =>
+  z.preprocess(vazioViraAusente, textoLongo(campo, max).optional());
+
+export const AtaInput = z.strictObject({
+  titulo: texto('o título', 120),
+  data: dataIso,
+  participantes: textoLongoOpcional('a lista de participantes', 500),
+  resumo: textoLongoOpcional('o resumo', 1000),
+  conteudo: textoLongo('o texto da ata', 50000),
+  fixada: z.boolean(),
+  eventoId: z.preprocess(vazioViraAusente, id.optional()),
+}).refine(a => a.conteudo.trim() || a.resumo, {
+  path: ['conteudo'],
+  message: 'Escreva o que foi discutido ou um resumo da reunião.',
+});
+export type AtaInput = z.input<typeof AtaInput>;
+
 // ---------- utilidades ----------
 
 function capitalizar(s: string): string {
