@@ -141,7 +141,7 @@ export function criarBancoDemo(): Banco {
     requests: [
       { id: 'r1', status: 'pendente', autorId: 'u2', criadoEm: '2026-11-14T10:20:00',
         mensagem: 'Gostaríamos de reservar o salão para o ensaio geral de Natal.',
-        evento: { data: '2026-11-21', c: 'evento', n: 'Ensaio geral do Natal', t: '15h', un: SA } },
+        evento: { data: '2026-11-21', c: 'ensaio', n: 'Ensaio geral do Natal', t: '15h', un: SA } },
       { id: 'r2', status: 'pendente', autorId: 'u3', criadoEm: '2026-11-15T19:02:00',
         mensagem: 'Noite de louvor aberta para toda a igreja.',
         evento: { data: '2026-12-04', c: 'evento', n: 'Noite de Louvor', t: '20h', un: RP } },

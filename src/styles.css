@@ -3,7 +3,7 @@
   color-scheme:light;
   --bg:#eceef2; --frame:#f6f7f9; --cell:#ffffff; --cell-empty:transparent; --line:#dcdfe5;
   --text:#1c2028; --muted:#5f6672; --faint:#9aa1ad; --hover:#f1f3f7;
-  --culto:#3a6be0; --evento:#d99a12; --feriado:#dc3f3f; --aniv:#c93f88; --data:#278f62;
+  --culto:#3a6be0; --evento:#d99a12; --feriado:#dc3f3f; --aniv:#c93f88; --data:#278f62; --reuniao:#6b4fd1; --ensaio:#0f8a9c;
   --azul:#2c6bd6; --rosa:#db4f95; --amarelo:#d9a514; --verde:#278f62;
   --ok:#1f8a57; --warn:#b7790f;
 }
@@ -12,7 +12,7 @@
     color-scheme:dark;
     --bg:#161618; --frame:#1d1d20; --cell:#242427; --line:#313136;
     --text:#ececef; --muted:#a1a1a9; --faint:#6b6b74; --hover:#2b2b2f;
-    --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f;
+    --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f; --reuniao:#a08bff; --ensaio:#3cc6d9;
     --azul:#5b8cff; --rosa:#f27ab7; --amarelo:#f2c53c; --verde:#4cc58f;
     --ok:#4cc58f; --warn:#f2bd3c;
   }
@@ -21,7 +21,7 @@
   color-scheme:dark;
   --bg:#161618; --frame:#1d1d20; --cell:#242427; --line:#313136;
   --text:#ececef; --muted:#a1a1a9; --faint:#6b6b74; --hover:#2b2b2f;
-  --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f;
+  --culto:#5b8cff; --evento:#f2bd3c; --feriado:#ff6b6b; --aniv:#f27ab7; --data:#4cc58f; --reuniao:#a08bff; --ensaio:#3cc6d9;
   --azul:#5b8cff; --rosa:#f27ab7; --amarelo:#f2c53c; --verde:#4cc58f;
   --ok:#4cc58f; --warn:#f2bd3c;
 }

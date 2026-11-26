@@ -22,7 +22,11 @@ const CATS: Record<Categoria, { label: string; one: string; ord: number }> = {
   aniv: { label: 'Aniversários e homenagens', one: 'Aniversário ou homenagem', ord: 2 },
   data: { label: 'Datas comemorativas', one: 'Data comemorativa', ord: 3 },
   culto: { label: 'Cultos', one: 'Culto', ord: 4 },
+  reuniao: { label: 'Reuniões', one: 'Reunião', ord: 5 },
+  ensaio: { label: 'Ensaios', one: 'Ensaio', ord: 6 },
 };
+/** Categorias de rotina: aparecem no dia, mas não pintam a barra de destaque. */
+const ROTINA = new Set<Categoria>(['culto', 'reuniao', 'ensaio']);
 const NOME_COR: Record<CorCampanha, string> = { azul: 'Azul', rosa: 'Rosa', amarelo: 'Amarelo', verde: 'Verde' };
 const NOME_STATUS: Record<StatusSolicitacao, string> = { pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada' };
 
@@ -366,7 +370,7 @@ function renderGrid(): void {
     const cell = document.createElement('div');
     cell.className = 'day' + (w === 0 ? ' sun' : '') + (k === hoje ? ' today' : '');
     if (list.some(e => e.c === 'feriado' && !e.pend)) cell.classList.add('hol');
-    const hl = list.find(e => e.c !== 'culto' && !e.pend);
+    const hl = list.find(e => !ROTINA.has(e.c) && !e.pend);
     setHtml(cell, html`
       ${hl ? html`<span class="bar" style="background:${color(hl.c)}"></span>` : ''}
       <span class="num">${d}</span><span class="add-hint" aria-hidden="true">+</span>

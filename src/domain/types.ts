@@ -5,7 +5,7 @@
 // a partir do banco).
 // =====================================================================
 
-export const CATEGORIAS = ['feriado', 'evento', 'aniv', 'data', 'culto'] as const;
+export const CATEGORIAS = ['feriado', 'evento', 'aniv', 'data', 'culto', 'reuniao', 'ensaio'] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
 
 export const PERFIS = ['admin', 'user'] as const;

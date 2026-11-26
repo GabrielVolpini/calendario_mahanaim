@@ -53,17 +53,20 @@ const armazenamentoSessao: SupportedStorage = {
 // ---------- conversões app ↔ banco ----------
 const CATEGORIA_DO_TIPO: Record<string, Categoria> = {
   culto: 'culto', feriado: 'feriado', aniversario: 'aniv', data_comemorativa: 'data',
-  // conferencia, reuniao, especial e tipos novos aparecem como "evento especial"
+  reuniao: 'reuniao', ensaio: 'ensaio',
+  // conferencia, especial e tipos novos aparecem como "evento especial"
 };
 const categoria = (tipo: string): Categoria => CATEGORIA_DO_TIPO[tipo] ?? 'evento';
 
-/** Tipo no banco para a categoria escolhida na tela. Mantém conferência/reunião ao editar. */
+/** Tipo no banco para a categoria escolhida na tela. Mantém conferência ao editar. */
 function tipoDoBanco(c: Categoria, tipoAtual?: string): string {
   switch (c) {
     case 'culto': return 'culto';
     case 'feriado': return 'feriado';
     case 'aniv': return 'aniversario';
     case 'data': return 'data_comemorativa';
+    case 'reuniao': return 'reuniao';
+    case 'ensaio': return 'ensaio';
     case 'evento': return tipoAtual && categoria(tipoAtual) === 'evento' ? tipoAtual : 'especial';
   }
 }
