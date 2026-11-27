@@ -1,6 +1,6 @@
 # Calendário Mahanaim
 
-Calendário da liderança da Igreja Internacional Mahanaim.
+Gestão da liderança da Igreja Internacional Mahanaim (calendário, solicitações, atas e usuários).
 Feito em **TypeScript** (com **Vite** e **Zod** para as validações).
 Os dados ficam no **Supabase** (Postgres + Auth). Sem configuração, o app roda no
 **modo protótipo**, com dados de exemplo no `localStorage`.
@@ -39,7 +39,7 @@ update public.perfis set perfil = 'admin' where email = 'seu-email@exemplo.com';
 Os próximos acessos o admin cria pela tela de **Usuários** (`/users`),
 que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
 
-> **Hospedagem:** as telas de usuários e de atas têm rota própria (`/users`, `/atas`). No `npm run dev` isso já funciona;
+> **Hospedagem:** as telas de solicitações, usuários e atas têm rota própria (`/solicitacoes`, `/users`, `/atas`). No `npm run dev` isso já funciona;
 > ao publicar o `dist/`, configure o servidor para devolver o `index.html` em qualquer caminho
 > (ex.: *rewrite* `/* → /index.html` na Vercel/Netlify).
 
@@ -64,20 +64,31 @@ No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
 
 ## O que o app faz
 
+- **Visual da igreja** (proposta em [`docs/redesign`](docs/redesign/README.md)): cores tiradas do logo
+  (azul-marinho, rosa-claro e o degradê do anel), logo oficial no menu, no login e no ícone da aba.
+- **Menu lateral** com Calendário, Solicitações, Atas de reunião e Usuários (só Admin).
+  No computador recolhe para só ícones (botão *Recolher menu*, a escolha fica salva); no celular vira gaveta (☰).
+- **Tema claro, escuro ou do sistema**, escolhido no rodapé do menu e salvo no navegador.
+- **Painel do calendário**: minicalendário, filtros por tipo de evento (com a quantidade no mês) e a campanha do mês.
+  No tablet e no celular abre pelo botão *Filtros*.
+- **Barra de período**: Mês, Semana, Dia e Ano + botão **Calendário / Lista** (a lista vale para o período escolhido).
+- **Busca** no topo por título ou local; mostra os próximos primeiro.
+- **Celular**: os nomes dos eventos aparecem pequenos na grade do mês (nome curto, ex.: *Família*, *Confrat.*);
+  tocar num dia seleciona e mostra a agenda dele embaixo da grade.
 - **Login com e-mail e senha** e opção **Lembrar de mim por 30 dias**
   (marcado: sessão de 30 dias; desmarcado: sessão até fechar o navegador).
 - **User (visualização)**: vê o calendário, envia **solicitações de evento**
   e acompanha em *Minhas solicitações*. O pedido aparece tracejado só para o autor e os admins.
 - **Admin**: cria, edita e exclui eventos (inclusive de vários dias e séries de cultos),
-  aprova, ajusta ou recusa solicitações, gerencia usuários e a campanha do mês.
+  aprova, ajusta ou recusa solicitações (tela `/solicitacoes`), gerencia usuários e a campanha do mês.
 - **Tela de Usuários** (`/users`, só Admin; o botão nem aparece para User):
   - lista nome, e-mail, situação da senha provisória e perfil de cada pessoa;
-  - **+ Novo usuário** (canto superior esquerdo) abre o pop-up de criação, com gerador de senha provisória.
+  - **+ Novo usuário** (no cabeçalho da tela) abre o pop-up de criação, com gerador de senha provisória.
     A senha aparece **uma única vez**, com botão *Copiar acesso*, e **não fica salva** em lugar nenhum
     (o Supabase guarda só o hash). Na lista ela aparece como `••••••••` + "Aguardando 1º acesso" ou "Já acessou";
   - trocar perfil, desativar/reativar e **excluir** (dupla validação: confirmar e depois digitar o e-mail
     da pessoa). Excluir apaga o acesso do Supabase Auth; ninguém exclui o próprio acesso.
-- **Atas de reunião** (`/atas`, botão *Atas* ao lado de *Novo evento*):
+- **Atas de reunião** (`/atas`, item *Atas de reunião* do menu):
   - bloco de notas das reuniões: título, data, participantes, **resumo** (decisões) e o texto livre do que foi discutido;
   - todo usuário ativo **lê**; só Admin cria, edita, **fixa no topo** e exclui (garantido pelo RLS da tabela `atas`);
   - busca por título, participante ou assunto (sem diferenciar acento);
@@ -89,9 +100,11 @@ No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
 ## Estrutura
 
 ```
-index.html              telas e diálogos
+index.html              telas e diálogos (+ script que aplica o tema antes de desenhar)
+public/logo-mahanaim.jpg  logo da igreja (menu, login, favicon)
+docs/redesign/          proposta da nova interface e protótipo navegável
 src/main.ts             lógica da tela (só fala com `api`)
-src/styles.css          visual (claro/escuro, responsivo)
+src/styles.css          visual: cores da igreja, temas claro/escuro, menu lateral, responsivo
 src/domain/types.ts     tipos do domínio (Evento, Usuario, Solicitacao...)
 src/domain/schemas.ts   validações com Zod (reaproveitáveis no servidor)
 src/api/contract.ts     interface CalendarApi = contrato do backend
