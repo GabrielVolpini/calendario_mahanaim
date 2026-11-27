@@ -68,7 +68,7 @@ No menu do Admin, **Restaurar dados de exemplo** volta tudo ao estado inicial.
   (azul-marinho, rosa-claro e o degradê do anel), logo oficial no menu, no login e no ícone da aba.
 - **Menu lateral** com Calendário, Solicitações, Atas de reunião e Usuários (só Admin).
   No computador recolhe para só ícones (botão *Recolher menu*, a escolha fica salva); no celular vira gaveta (☰).
-- **Tema claro, escuro ou do sistema**, escolhido no rodapé do menu e salvo no navegador.
+- **Tema claro ou escuro**, escolhido no rodapé do menu e salvo no navegador (sem escolha salva, abre no claro).
 - **Painel do calendário**: minicalendário, filtros por tipo de evento (com a quantidade no mês) e a campanha do mês.
   No tablet e no celular abre pelo botão *Filtros*.
 - **Barra de período**: Mês, Semana, Dia e Ano + botão **Calendário / Lista** (a lista vale para o período escolhido).

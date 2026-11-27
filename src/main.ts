@@ -334,22 +334,19 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && (shell.classList.contains('gaveta') || shell.classList.contains('painel-aberto'))) fecharGaveta();
 });
 
-// ---------- tema: claro, escuro ou o do aparelho ----------
-type Tema = 'claro' | 'escuro' | 'sistema';
-const escuroDoSistema = matchMedia('(prefers-color-scheme: dark)');
-let tema: Tema = ((t): Tema => (t === 'claro' || t === 'escuro' ? t : 'sistema'))(lerPref('mahanaim-tema'));
+// ---------- tema: claro ou escuro (sem escolha salva, abre no claro) ----------
+type Tema = 'claro' | 'escuro';
+let tema: Tema = lerPref('mahanaim-tema') === 'escuro' ? 'escuro' : 'claro';
 function aplicarTema(): void {
-  const escuro = tema === 'escuro' || (tema === 'sistema' && escuroDoSistema.matches);
-  document.documentElement.dataset['theme'] = escuro ? 'dark' : 'light';
+  document.documentElement.dataset['theme'] = tema === 'escuro' ? 'dark' : 'light';
   $$<HTMLButtonElement>('#theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset['tema'] === tema)));
 }
 $$<HTMLButtonElement>('#theme button').forEach(b => b.addEventListener('click', () => {
   const t = b.dataset['tema'];
-  tema = t === 'claro' || t === 'escuro' ? t : 'sistema';
+  tema = t === 'escuro' ? 'escuro' : 'claro';
   gravarPref('mahanaim-tema', tema);
   aplicarTema();
 }));
-escuroDoSistema.addEventListener('change', aplicarTema);
 aplicarTema();
 
 $('#mLogout').addEventListener('click', async () => {
