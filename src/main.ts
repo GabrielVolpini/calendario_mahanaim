@@ -11,7 +11,7 @@ import {
 } from './domain/types';
 import { $, $$, html, raw, setHtml, type SafeHtml } from './ui/dom';
 import {
-  MESES_C, cap, diaDaSemana, fmtDate, fmtShort, fmtWhen, hojeKey, horaParaInput, iniciais,
+  cap, diaDaSemana, fmtDate, fmtShort, fmtWhen, hojeKey, horaParaInput, iniciais,
   inputParaHora, key, minutos, nomeMes, parseKey,
 } from './ui/format';
 
@@ -30,12 +30,17 @@ const ROTINA = new Set<Categoria>(['culto', 'reuniao', 'ensaio']);
 const NOME_COR: Record<CorCampanha, string> = { azul: 'Azul', rosa: 'Rosa', amarelo: 'Amarelo', verde: 'Verde' };
 const NOME_STATUS: Record<StatusSolicitacao, string> = { pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada' };
 
-interface Mes { y: number; m: number }
-const START: Mes = { y: 2026, m: 10 }, END: Mes = { y: 2027, m: 11 };
-const idx = (c: Mes) => (c.y - START.y) * 12 + (c.m - START.m);
-const TOTAL = idx(END) + 1;
-const fromIdx = (i: number): Mes => ({ y: START.y + Math.floor((START.m + i) / 12), m: (START.m + i) % 12 });
-const dentroDoPeriodo = (c: Mes) => idx(c) >= 0 && idx(c) < TOTAL;
+type Visao = 'mes' | 'semana' | 'dia' | 'ano' | 'lista';
+const VISOES: readonly Visao[] = ['mes', 'semana', 'dia', 'ano', 'lista'];
+/** Texto das setas de navegação em cada visão. */
+const PASSO: Record<Visao, [string, string]> = {
+  mes: ['Mês anterior', 'Próximo mês'], lista: ['Mês anterior', 'Próximo mês'],
+  semana: ['Semana anterior', 'Próxima semana'], dia: ['Dia anterior', 'Próximo dia'], ano: ['Ano anterior', 'Próximo ano'],
+};
+const SEM_C = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
+const keyOf = (d: Date): DataIso => key(d.getFullYear(), d.getMonth(), d.getDate());
+const somaDias = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const inicioDaSemana = (d: Date) => somaDias(d, -d.getDay());
 const color = (c: string) => `var(--${c})`;
 
 /** Um item como aparece num dia (evento publicado ou pedido pendente). */
@@ -56,8 +61,9 @@ let REQS: SolicitacaoView[] = [];
 let CAMPS: Campanhas = {};
 let ATAS: Ata[] = [];
 let IDX: Record<DataIso, ItemDia[]> = {};
-let cur: Mes = { ...START };
-let view: 'cal' | 'list' = 'cal';
+/** Data em foco: define o dia, a semana, o mês ou o ano mostrado. */
+let foco: Date = parseKey(hojeKey());
+let view: Visao = 'mes';
 const active = new Set<Categoria>(CATEGORIAS);
 
 const isAdmin = () => ME?.perfil === 'admin';
@@ -179,7 +185,6 @@ async function enterApp(): Promise<void> {
   $('#mReset').hidden = !adm || !MODO_DEMO;
   const [longo, curto] = adm ? ['Novo evento', 'Novo'] : ['Solicitar evento', 'Solicitar'];
   setHtml($('#btnNew'), html`<span aria-hidden="true">+</span> <span class="lbl-long">${longo}</span><span class="lbl-short">${curto}</span>`);
-  buildMonths();
   buildLegend();
   try { await loadData(); } catch (e) { return falha(e); }
   render();
@@ -295,25 +300,33 @@ $('#btnNew').addEventListener('click', () => openForm(isAdmin() ? { mode: 'creat
 $('#btnRequests').addEventListener('click', () => openRequests());
 
 function defaultDate(): DataIso {
-  const t = new Date();
-  return t.getFullYear() === cur.y && t.getMonth() === cur.m ? key(cur.y, cur.m, t.getDate()) : key(cur.y, cur.m, 1);
+  if (view === 'dia' || view === 'semana') return keyOf(foco);
+  const t = new Date(), y = foco.getFullYear(), m = foco.getMonth();
+  return t.getFullYear() === y && t.getMonth() === m ? key(y, m, t.getDate()) : key(y, m, 1);
 }
 
 // =====================================================================
 // CALENDÁRIO
 // =====================================================================
-function buildMonths(): void {
-  const nav = $('#months');
-  nav.replaceChildren();
-  for (let i = 0; i < TOTAL; i++) {
-    const c = fromIdx(i);
-    const b = document.createElement('button');
-    b.textContent = `${MESES_C[c.m]}/${String(c.y).slice(2)}`;
-    b.dataset['i'] = String(i);
-    b.addEventListener('click', () => { cur = c; render(); });
-    nav.appendChild(b);
+/** Leva o calendário até a data (mantém a visão atual). */
+function irPara(k: DataIso): void { foco = parseKey(k); render(); }
+
+function tituloPeriodo(): string {
+  const d = foco, y = d.getFullYear();
+  switch (view) {
+    case 'ano': return String(y);
+    case 'dia': return `${(diaDaSemana(keyOf(d))).replace('-feira', '')}, ${d.getDate()} de ${nomeMes(d.getMonth())} de ${y}`;
+    case 'semana': {
+      const a = inicioDaSemana(d), b = somaDias(a, 6);
+      const curto = (x: Date) => nomeMes(x.getMonth()).slice(0, 3);
+      if (a.getFullYear() !== b.getFullYear()) return `${a.getDate()} ${curto(a)} ${a.getFullYear()} – ${b.getDate()} ${curto(b)} ${b.getFullYear()}`;
+      if (a.getMonth() !== b.getMonth()) return `${a.getDate()} ${curto(a)} – ${b.getDate()} ${curto(b)} de ${y}`;
+      return `${a.getDate()} – ${b.getDate()} de ${nomeMes(b.getMonth())} de ${b.getFullYear()}`;
+    }
+    default: return `${nomeMes(d.getMonth())} de ${y}`;
   }
 }
+
 function buildLegend(): void {
   const lgd = $('#legend');
   lgd.replaceChildren();
@@ -335,26 +348,24 @@ function buildLegend(): void {
 }
 
 function render(): void {
-  $('#title').textContent = `${cap(nomeMes(cur.m))} de ${cur.y}`;
-  $<HTMLButtonElement>('#prev').disabled = idx(cur) <= 0;
-  $<HTMLButtonElement>('#next').disabled = idx(cur) >= TOTAL - 1;
-  $$<HTMLButtonElement>('#months button').forEach(b => {
-    const on = Number(b.dataset['i']) === idx(cur);
-    b.setAttribute('aria-current', String(on));
-    if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  });
+  $('#title').textContent = tituloPeriodo();
+  const [ant, prox] = PASSO[view];
+  $('#prev').setAttribute('aria-label', ant);
+  $('#next').setAttribute('aria-label', prox);
+  $$<HTMLButtonElement>('#views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset['v'] === view)));
   renderCampaign();
-  $('#calView').hidden = view !== 'cal';
-  $('#listView').hidden = view !== 'list';
-  if (view === 'cal') renderGrid(); else renderList();
+  const telas: Record<Visao, string> = { mes: '#calView', semana: '#weekView', dia: '#dayView', ano: '#yearView', lista: '#listView' };
+  VISOES.forEach(v => { $(telas[v]).hidden = v !== view; });
+  ({ mes: renderGrid, semana: renderWeek, dia: renderDay, ano: renderYear, lista: renderList })[view]();
 }
 
 function renderCampaign(): void {
-  const ym: AnoMes = key(cur.y, cur.m, 1).slice(0, 7), camp = CAMPS[ym];
+  const ym: AnoMes = keyOf(foco).slice(0, 7), camp = CAMPS[ym];
   const old = $('#campaign');
   const box = document.createElement('div'); // recria para limpar eventos antigos
   box.id = 'campaign';
   old.replaceWith(box);
+  if (view === 'ano') return; // campanha é do mês; no ano não faz sentido
   if (camp) {
     box.className = 'campaign';
     setHtml(box, html`<i class="ribbon" style="background:${color(camp.c)}"></i><strong>${camp.n}</strong><span>${camp.s}</span>${isAdmin() ? raw('<button class="btn sm ghost edit">Editar</button>') : ''}`);
@@ -370,7 +381,7 @@ function renderCampaign(): void {
 }
 
 function renderGrid(): void {
-  const { y, m } = cur, grid = $('#grid');
+  const y = foco.getFullYear(), m = foco.getMonth(), grid = $('#grid');
   grid.replaceChildren();
   const lead = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate(), hoje = hojeKey();
   const blank = () => { const b = document.createElement('div'); b.className = 'day blank'; return b; };
@@ -405,7 +416,7 @@ function renderGrid(): void {
 }
 
 function renderList(): void {
-  const { y, m } = cur, box = $('#listView');
+  const y = foco.getFullYear(), m = foco.getMonth(), box = $('#listView');
   box.replaceChildren();
   const dim = new Date(y, m + 1, 0).getDate();
   for (let d = 1; d <= dim; d++) {
@@ -419,6 +430,83 @@ function renderList(): void {
     box.appendChild(row);
   }
   if (!box.children.length) setHtml(box, html`<p class="empty">Nenhum item neste mês com os filtros escolhidos. Ative mais tipos na legenda abaixo.</p>`);
+}
+
+/** Torna o elemento um botão que abre o diálogo do dia (clique, Enter ou espaço). */
+function abreDiaAo(el: HTMLElement, k: DataIso, rotulo: string): void {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'button');
+  el.setAttribute('aria-label', rotulo);
+  el.addEventListener('click', () => openDay(k));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(k); } });
+}
+const qtd = (n: number) => `${n} ${n === 1 ? 'item' : 'itens'}`;
+
+function renderWeek(): void {
+  const box = $('#weekView'), a = inicioDaSemana(foco), hoje = hojeKey();
+  box.replaceChildren();
+  for (let i = 0; i < 7; i++) {
+    const dt = somaDias(a, i), k = keyOf(dt), list = eventsOf(k);
+    const col = document.createElement('div');
+    col.className = 'wday' + (i === 0 ? ' sun' : '') + (k === hoje ? ' today' : '');
+    if (list.some(e => e.c === 'feriado' && !e.pend)) col.classList.add('hol');
+    setHtml(col, html`
+      <div class="h"><small>${SEM_C[i]}</small><b>${dt.getDate()}</b></div>
+      ${list.length
+        ? html`<ul class="wev">${list.map(e => html`
+            <li class="${e.pend ? 'pend' : ''}" style="--c:${color(e.c)}"><span class="t">${e.t ?? 'Dia todo'}</span>${label(e)}</li>`)}</ul>`
+        : html`<span class="nada">Livre</span>`}
+    `);
+    abreDiaAo(col, k, `${diaDaSemana(k)}, ${dt.getDate()} de ${nomeMes(dt.getMonth())}, ${qtd(list.length)}`);
+    box.appendChild(col);
+  }
+}
+
+function renderDay(): void {
+  const box = $('#dayView'), k = keyOf(foco), list = eventsOf(k), adm = isAdmin();
+  box.replaceChildren();
+  list.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'slot' + (e.pend ? ' pend' : '');
+    row.style.setProperty('--c', color(e.c));
+    const kind = e.pend ? `Aguardando aprovação · enviado por ${e.autor ?? '—'}` : CATS[e.c].one + (e.serie ? ' · recorrente' : '');
+    setHtml(row, html`<span class="t">${e.t ?? 'Dia todo'}</span>
+      <span class="n">${e.n}${sub(e) ? html`<span class="l">${sub(e)}</span>` : ''}<span class="k">${kind}</span></span>`);
+    abreDiaAo(row, k, `${e.t ? e.t + ', ' : ''}${e.n}`);
+    box.appendChild(row);
+  });
+  if (!list.length) setHtml(box, html`<p class="empty">Nada marcado neste dia.</p>`);
+  const add = document.createElement('button');
+  add.className = 'btn add-dia';
+  add.textContent = adm ? '+ Adicionar neste dia' : '+ Solicitar evento neste dia';
+  add.addEventListener('click', () => openForm(adm ? { mode: 'create', ev: { data: k } } : { mode: 'request', ev: { data: k } }));
+  box.appendChild(add);
+}
+
+function renderYear(): void {
+  const box = $('#yearView'), y = foco.getFullYear(), hoje = hojeKey();
+  box.replaceChildren();
+  for (let m = 0; m < 12; m++) {
+    const lead = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate();
+    const dias: SafeHtml[] = [];
+    for (let d = 1; d <= dim; d++) {
+      const k = key(y, m, d), list = eventsOf(k);
+      const cls = [
+        k === hoje ? 'today' : '',
+        list.some(e => e.c === 'feriado' && !e.pend) ? 'hol' : '',
+        list.some(e => !ROTINA.has(e.c) && e.c !== 'feriado' && !e.pend) ? 'esp' : '',
+      ].filter(Boolean).join(' ');
+      dias.push(html`<span class="${cls}">${d}</span>`);
+    }
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'mini' + (m === new Date().getMonth() && y === new Date().getFullYear() ? ' cur' : '');
+    card.setAttribute('aria-label', `Abrir ${nomeMes(m)} de ${y}`);
+    setHtml(card, html`<h3>${cap(nomeMes(m))}</h3>
+      <div class="g" aria-hidden="true">${SEM_C.map(s => html`<span class="w">${s.charAt(0)}</span>`)}${Array.from({ length: lead }, () => raw('<span></span>'))}${dias}</div>`);
+    card.addEventListener('click', () => { foco = new Date(y, m, 1); view = 'mes'; render(); });
+    box.appendChild(card);
+  }
 }
 
 // =====================================================================
@@ -603,8 +691,7 @@ f.form.addEventListener('submit', async ev => {
     await refresh();
     // Criado pelo botão do topo: leva o calendário até o mês do evento
     if (!dayDlg.open && ctx.mode !== 'review') {
-      const d = parseKey(dados.data), c = { y: d.getFullYear(), m: d.getMonth() };
-      if (dentroDoPeriodo(c)) { cur = c; render(); }
+      irPara(dados.data);
     }
     reopenDay();
     if (reqDlg.open) renderRequests();
@@ -731,10 +818,8 @@ function renderRequests(): void {
   }));
   $$('[data-goto]', box).forEach(b => b.addEventListener('click', () => {
     const r = porId(b, 'goto'); if (!r) return;
-    const d = parseKey(r.evento.data);
-    cur = { y: d.getFullYear(), m: d.getMonth() };
     reqDlg.close();
-    render();
+    irPara(r.evento.data);
     openDay(r.evento.data);
   }));
 }
@@ -1028,9 +1113,8 @@ $('#ataDel').addEventListener('click', async () => {
 $('#ataGoto').addEventListener('click', () => {
   const ev = ataAberta?.eventoId ? EVENTS.find(e => e.id === ataAberta?.eventoId) : undefined;
   if (!ev) return;
-  const d = parseKey(ev.data), c = { y: d.getFullYear(), m: d.getMonth() };
   navegar('/');
-  if (dentroDoPeriodo(c)) { cur = c; render(); }
+  irPara(ev.data);
   openDay(ev.data);
 });
 
@@ -1127,17 +1211,22 @@ af.form.addEventListener('submit', async ev => {
 // =====================================================================
 // NAVEGAÇÃO E INÍCIO
 // =====================================================================
-const step = (n: number) => { cur = fromIdx(Math.min(TOTAL - 1, Math.max(0, idx(cur) + n))); render(); };
+/** Anda um período para trás (-1) ou para frente (+1), conforme a visão. */
+function step(n: number): void {
+  const y = foco.getFullYear(), m = foco.getMonth(), d = foco.getDate();
+  if (view === 'dia') foco = somaDias(foco, n);
+  else if (view === 'semana') foco = somaDias(foco, 7 * n);
+  else if (view === 'ano') foco = new Date(y + n, m, Math.min(d, new Date(y + n, m + 1, 0).getDate()));
+  else foco = new Date(y, m + n, 1);
+  render();
+}
 $('#prev').addEventListener('click', () => step(-1));
 $('#next').addEventListener('click', () => step(1));
-const setView = (v: typeof view) => {
-  view = v;
-  $('#vCal').setAttribute('aria-pressed', String(v === 'cal'));
-  $('#vList').setAttribute('aria-pressed', String(v === 'list'));
+$('#today').addEventListener('click', () => irPara(hojeKey()));
+$$<HTMLButtonElement>('#views button').forEach(b => b.addEventListener('click', () => {
+  view = (b.dataset['v'] ?? 'mes') as Visao;
   render();
-};
-$('#vCal').addEventListener('click', () => setView('cal'));
-$('#vList').addEventListener('click', () => setView('list'));
+}));
 $$<HTMLDialogElement>('dialog').forEach(d => {
   $$('[data-close]', d).forEach(b => b.addEventListener('click', () => d.close()));
   d.addEventListener('click', e => { if (e.target === d && !d.hasAttribute('data-sticky')) d.close(); });
@@ -1152,10 +1241,8 @@ document.addEventListener('keydown', e => {
 
 void (async function init() {
   const t = new Date();
-  let c: Mes = { y: t.getFullYear(), m: t.getMonth() };
   const mh = /^#(\d{4})-(\d{2})$/.exec(location.hash);
-  if (mh) c = { y: Number(mh[1]), m: Number(mh[2]) - 1 };
-  if (dentroDoPeriodo(c)) cur = c;
+  if (mh && !(Number(mh[1]) === t.getFullYear() && Number(mh[2]) - 1 === t.getMonth())) foco = new Date(Number(mh[1]), Number(mh[2]) - 1, 1);
   if (BANCO_NAO_CONFIGURADO) {
     // Site publicado sem as chaves do Supabase: não cai nos dados de exemplo
     showLogin();
