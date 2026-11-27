@@ -4,8 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mahanaim · Gestão da liderança</title>
-<link rel="icon" href="/logo-mahanaim.jpg">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="theme-color" content="#0B1650">
+<meta name="description" content="Calendário, solicitações e atas da liderança da Igreja Internacional Mahanaim.">
+<!-- App instalado no iPhone: abre em tela cheia, com nome e barra de status próprios -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mahanaim">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <script>
   // Aplica o tema antes de desenhar a página (evita piscar). Sem escolha salva, abre no claro.
   (function () {
@@ -34,6 +41,7 @@
     </div>
     <p class="err" id="lgErr" hidden></p>
     <button class="btn primary" type="submit" id="lgSubmit">Entrar</button>
+    <p class="pwd-out"><button type="button" class="linkbtn" data-instalar hidden>Instalar o app no celular</button></p>
   </form>
 </section>
 
@@ -72,6 +80,7 @@
         <div class="t"><b id="meName"></b><small id="meRole"></small></div>
       </div>
       <button type="button" class="side-btn" id="mReset" hidden title="Restaurar dados de exemplo"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span class="lbl">Restaurar dados de exemplo</span></button>
+      <button type="button" class="side-btn" data-instalar title="Instalar app" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3M10.5 18.5h3"/></svg><span class="lbl">Instalar app</span></button>
       <button type="button" class="side-btn" id="mLogout" title="Sair"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="lbl">Sair</span></button>
       <button type="button" class="side-btn collapse" id="collapse" aria-expanded="true" aria-controls="side"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 17-5-5 5-5M18 17l-5-5 5-5"/></svg><span class="lbl">Recolher menu</span></button>
     </div>
@@ -360,6 +369,29 @@
     </div>
   </form>
 </dialog>
+
+<!-- ================= DIÁLOGO: INSTALAR NO IPHONE / IPAD ================= -->
+<dialog id="iosDlg" aria-labelledby="iosTitle">
+  <div class="dlg-head">
+    <div><h2 id="iosTitle">Instalar no iPhone</h2><p>O app fica na tela de início, abre em tela cheia, como os outros apps.</p></div>
+    <button class="iconbtn" data-close aria-label="Fechar">✕</button>
+  </div>
+  <div class="dlg-body">
+    <ol class="ios-passos">
+      <li>Toque no botão <b>Compartilhar</b> <svg class="i" viewBox="0 0 24 24" aria-label="(ícone de quadrado com seta para cima)"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg> na barra do navegador.</li>
+      <li>Role a lista e toque em <b>Adicionar à Tela de Início</b>.</li>
+      <li>Confirme em <b>Adicionar</b>. Pronto: abra o app pelo ícone <b>Mahanaim</b>.</li>
+    </ol>
+    <p class="note" id="iosNota" hidden>Abra este site no <b>Safari</b> para instalar. Em outros navegadores a opção pode não aparecer.</p>
+  </div>
+  <div class="dlg-foot"><button type="button" class="btn primary" data-close>Entendi</button></div>
+</dialog>
+
+<div class="atualizar" id="atualizar" role="status" hidden>
+  <span>Nova versão do app disponível.</span>
+  <button type="button" class="btn primary" id="atualizarOk">Atualizar</button>
+  <button type="button" class="iconbtn sm" id="atualizarX" aria-label="Agora não">✕</button>
+</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
