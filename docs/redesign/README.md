@@ -12,7 +12,7 @@
 | 2 | Usar o **mesmo logo** da foto de perfil do Instagram | Logo capturado em 720×720 px e salvo em [`logo-mahanaim.jpg`](logo-mahanaim.jpg). Entra no menu lateral, na tela de login e como ícone da aba do navegador (favicon). |
 | 3 | Identidade visual inspirada no **Dribbble** ([Calendar – Dashboard Design](https://dribbble.com/shots/20596928-Calendar-Dashboard-Design)) | Mesma estrutura: menu lateral, painel com minicalendário e filtros, barra superior com busca e usuário, grade grande do mês com eventos em “etiquetas” (barra colorida + horário + título). |
 | 4 | **Todas as abas no menu lateral**, que abre e fecha | Calendário, Solicitações, Atas de reunião e Usuários saem dos botões do topo e vão para o menu. O menu recolhe para só ícones (e no celular vira gaveta). |
-| 5 | **Modo claro e modo escuro** com botão para trocar | Seletor **Claro / Escuro / Sistema** no rodapé do menu. A escolha fica salva no navegador. |
+| 5 | **Modo claro e modo escuro** com botão para trocar | Seletor **Claro / Escuro** no rodapé do menu. A escolha fica salva no navegador. |
 
 ## 2. Como fica a tela
 
@@ -43,7 +43,7 @@
   | Solicitações (com contador de pendentes) | todos (Admin: aprovar; User: *Minhas solicitações*) | `/solicitacoes` *(nova rota; hoje é um diálogo)* |
   | Atas de reunião | todos | `/atas` |
   | Usuários | só Admin (o item nem aparece para User) | `/users` |
-- **Rodapé:** seletor de tema (Claro / Escuro / Sistema), cartão do usuário logado (nome, e-mail, perfil) com **Sair**, e no Admin o **Restaurar dados de exemplo** (só no modo protótipo).
+- **Rodapé:** seletor de tema (Claro / Escuro), cartão do usuário logado (nome, e-mail, perfil) com **Sair**, e no Admin o **Restaurar dados de exemplo** (só no modo protótipo).
 - **Abrir/fechar:**
   - Computador: botão **«** recolhe para uma faixa de 72 px só com ícones (o nome aparece ao passar o mouse). A escolha fica salva.
   - Tablet (até 1100 px): começa recolhido.
@@ -107,7 +107,7 @@
 | Botão principal | marinho `#0B1650` + texto branco | rosa-claro `#FDE6EE` + texto marinho |
 | Menu lateral | marinho `#0B1650` | marinho `#050920` |
 
-- **Sistema** (padrão) segue o celular/computador. **Claro** e **Escuro** forçam. Salvo em `localStorage` (`mahanaim-tema`) e aplicado antes da página aparecer, para não piscar.
+- Só **Claro** e **Escuro** (a opção *Sistema* foi retirada a pedido). Sem escolha salva, o app abre no claro. Salvo em `localStorage` (`mahanaim-tema`) e aplicado antes da página aparecer, para não piscar.
 - O CSS atual já tem a base (`:root[data-theme="dark"]`); falta o botão e a troca das cores.
 
 ### 3.3 Cores dos tipos de evento
@@ -134,7 +134,7 @@ Ajustadas para combinar com o marinho, mas cada tipo continua com a cor de sempr
 ## 4. Funcionalidades novas (resumo)
 
 1. **Menu lateral recolhível** com Calendário, Solicitações, Atas e Usuários (respeitando o perfil).
-2. **Seletor de tema** Claro / Escuro / Sistema, salvo no navegador.
+2. **Seletor de tema** Claro / Escuro, salvo no navegador.
 3. **Logo oficial** no menu, login e favicon.
 4. **Painel do calendário** com minicalendário e filtros por tipo.
 5. **Botão Calendário / Lista** no canto direito da barra de período, junto do *Hoje*: a lista passa a valer para dia, semana, mês ou ano.
@@ -162,7 +162,7 @@ Se preferir, saem do escopo e a barra superior fica só com o usuário.
 
 | Etapa | Arquivos | Entrega |
 |---|---|---|
-| 1. Tokens de cor e tema | `src/styles.css`, `index.html` (script de tema no `<head>`) | Paleta nova + seletor Claro/Escuro/Sistema |
+| 1. Tokens de cor e tema | `src/styles.css`, `index.html` (script de tema no `<head>`) | Paleta nova + seletor Claro/Escuro |
 | 2. Logo | `public/logo-mahanaim.jpg`, `index.html` | Logo no menu, login e favicon |
 | 3. Estrutura com menu lateral | `index.html`, `src/main.ts` (roteamento), `src/styles.css` | Menu recolhível + gaveta no celular |
 | 4. Painel e barra de período | `index.html`, `src/main.ts` (`buildLegend` → filtros do painel, minicalendário, modo Calendário/Lista) | Painel, filtros e botão Calendário/Lista |
