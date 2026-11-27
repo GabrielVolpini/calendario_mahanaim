@@ -41,7 +41,7 @@ que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
 
 > **Hospedagem:** as telas de solicitações, usuários e atas têm rota própria (`/solicitacoes`, `/users`, `/atas`). No `npm run dev` isso já funciona;
 > ao publicar o `dist/`, configure o servidor para devolver o `index.html` em qualquer caminho
-> (ex.: *rewrite* `/* → /index.html` na Vercel/Netlify).
+> (ex.: *rewrite* `/* → /index.html`). Na Vercel isso já está no `vercel.json`; arquivos que existem (como `/assets/...` e o logo) continuam sendo servidos normalmente.
 
 | Comando | O que faz |
 |---|---|
