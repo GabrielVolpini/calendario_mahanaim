@@ -30,11 +30,12 @@ const ROTINA = new Set<Categoria>(['culto', 'reuniao', 'ensaio']);
 const NOME_COR: Record<CorCampanha, string> = { azul: 'Azul', rosa: 'Rosa', amarelo: 'Amarelo', verde: 'Verde' };
 const NOME_STATUS: Record<StatusSolicitacao, string> = { pendente: 'Pendente', aprovada: 'Aprovada', recusada: 'Recusada' };
 
-type Visao = 'mes' | 'semana' | 'dia' | 'ano' | 'lista';
-const VISOES: readonly Visao[] = ['mes', 'semana', 'dia', 'ano', 'lista'];
+type Visao = 'mes' | 'semana' | 'dia' | 'ano';
+/** Calendário (grade) ou Lista: vale para qualquer período. */
+type Modo = 'cal' | 'lista';
 /** Texto das setas de navegação em cada visão. */
 const PASSO: Record<Visao, [string, string]> = {
-  mes: ['Mês anterior', 'Próximo mês'], lista: ['Mês anterior', 'Próximo mês'],
+  mes: ['Mês anterior', 'Próximo mês'],
   semana: ['Semana anterior', 'Próxima semana'], dia: ['Dia anterior', 'Próximo dia'], ano: ['Ano anterior', 'Próximo ano'],
 };
 const SEM_C = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
@@ -42,6 +43,20 @@ const keyOf = (d: Date): DataIso => key(d.getFullYear(), d.getMonth(), d.getDate
 const somaDias = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 const inicioDaSemana = (d: Date) => somaDias(d, -d.getDay());
 const color = (c: string) => `var(--${c})`;
+/** Celular: o menu vira gaveta e tocar no dia seleciona em vez de abrir o diálogo. */
+const isMobile = () => matchMedia('(max-width: 760px)').matches;
+/** Preferências de tela salvas no navegador (tema, menu recolhido, modo). */
+const lerPref = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
+const gravarPref = (k: string, v: string): void => { try { localStorage.setItem(k, v); } catch { /* modo privado */ } };
+/** Nome curto para as etiquetas pequenas do celular. */
+const curto = (n: string) => n
+  .replace(/^Culto (de |da |do |das |dos )?/i, '')
+  .replace(/^Confraternização/i, 'Confrat.')
+  .replace(/^Apresentação (de |do |da )?/i, 'Apres. ')
+  .replace(/^Reunião (de |do |da )?/i, 'Reun. ')
+  .replace(/^Curso /i, '')
+  .replace(/^Ensaio (de |do |da )?/i, 'Ensaio ')
+  .trim() || n;
 
 /** Um item como aparece num dia (evento publicado ou pedido pendente). */
 interface ItemDia extends EventoDados {
@@ -64,6 +79,9 @@ let IDX: Record<DataIso, ItemDia[]> = {};
 /** Data em foco: define o dia, a semana, o mês ou o ano mostrado. */
 let foco: Date = parseKey(hojeKey());
 let view: Visao = 'mes';
+let modo: Modo = lerPref('mahanaim-modo') === 'lista' ? 'lista' : 'cal';
+/** Texto da busca do topo (vazio = sem busca). */
+let busca = '';
 const active = new Set<Categoria>(CATEGORIAS);
 
 const isAdmin = () => ME?.perfil === 'admin';
@@ -116,10 +134,13 @@ const eventsOf = (k: DataIso) => (IDX[k] ?? []).filter(e => active.has(e.c)).sor
 async function loadData(): Promise<void> {
   [EVENTS, REQS, CAMPS, ATAS] = await Promise.all([api.listEvents(), api.listRequests(), api.listCampaigns(), api.listMinutes()]);
   buildIndex();
+  // Admin: pedidos esperando aprovação. User: os próprios pedidos ainda pendentes.
   const pend = REQS.filter(r => r.status === 'pendente').length;
   const rc = $('#reqCount');
-  rc.hidden = !(isAdmin() && pend);
+  rc.hidden = !pend;
   rc.textContent = String(pend);
+  $('#pip').hidden = !pend;
+  $('#bell').setAttribute('aria-label', pend ? `Solicitações: ${pend} pendente${pend === 1 ? '' : 's'}` : 'Solicitações');
 }
 async function refresh(): Promise<void> {
   try { await loadData(); render(); } catch (e) { falha(e); }
@@ -143,7 +164,7 @@ function showLogin(): void {
   $('#appScreen').hidden = true;
   $('#pwdScreen').hidden = true;
   $('#loginScreen').hidden = false;
-  document.title = 'Calendário Mahanaim';
+  document.title = 'Mahanaim · Gestão da liderança';
   lg.err.hidden = true;
   lg.pass.value = '';
   setTimeout(() => lg.email.focus(), 0);
@@ -171,20 +192,19 @@ async function enterApp(): Promise<void> {
   $('#pwdScreen').hidden = true;
   $('#appScreen').hidden = false;
   const adm = isAdmin();
-  $('#avatar').textContent = iniciais(ME.nome);
-  $('#whoName').textContent = ME.nome.split(' ')[0] ?? ME.nome;
+  $('#avatar').textContent = $('#meAv').textContent = iniciais(ME.nome);
+  $('#whoName').textContent = ME.nome;
   $('#meName').textContent = ME.nome;
   $('#meEmail').textContent = ME.email;
-  const role = $('#meRole');
-  role.textContent = adm ? 'Admin' : 'User · visualização';
-  role.className = 'badge' + (adm ? ' admin' : '');
-  $('#btnRequests').hidden = !adm;
-  $('#btnUsers').hidden = !adm;
+  $('#meRole').textContent = adm ? 'Administrador' : 'Visualização';
+  $('#navUsers').hidden = !adm;
+  $('#navReqLbl').textContent = adm ? 'Solicitações' : 'Minhas solicitações';
   $('#aNew').hidden = !adm;
-  $('#mMine').hidden = adm;
+  $('#reqNew').hidden = adm;
   $('#mReset').hidden = !adm || !MODO_DEMO;
-  const [longo, curto] = adm ? ['Novo evento', 'Novo'] : ['Solicitar evento', 'Solicitar'];
-  setHtml($('#btnNew'), html`<span aria-hidden="true">+</span> <span class="lbl-long">${longo}</span><span class="lbl-short">${curto}</span>`);
+  const longo = adm ? 'Novo evento' : 'Solicitar evento';
+  setHtml($('#btnNew'), html`<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="lbl-long">${longo}</span>`);
+  $('#btnNew').setAttribute('aria-label', longo);
   buildLegend();
   try { await loadData(); } catch (e) { return falha(e); }
   render();
@@ -234,12 +254,13 @@ pw.form.addEventListener('submit', async ev => {
 $('#pwdLogout').addEventListener('click', async () => { await api.logout(); showLogin(); });
 
 // =====================================================================
-// ROTAS: "/" = calendário · "/users" = usuários (só admin) · "/atas" = atas de reunião
+// ROTAS: "/" = calendário · "/solicitacoes" · "/atas" = atas de reunião · "/users" = usuários (só admin)
 // =====================================================================
-type Pagina = 'cal' | 'users' | 'atas';
+type Pagina = 'cal' | 'req' | 'atas' | 'users';
+const CAMINHO: Record<Pagina, string> = { cal: '/', req: '/solicitacoes', atas: '/atas', users: '/users' };
 function paginaAtual(): Pagina {
   const p = location.pathname.replace(/\/+$/, '');
-  return p === '/users' ? 'users' : p === '/atas' ? 'atas' : 'cal';
+  return p === '/users' ? 'users' : p === '/atas' ? 'atas' : p === '/solicitacoes' ? 'req' : 'cal';
 }
 
 function navegar(caminho: string): void {
@@ -255,39 +276,89 @@ function aplicarRota(): void {
     toast('A tela de usuários é só para administradores.', true);
   }
   closeAll();
+  fecharGaveta();
   $('#calPage').hidden = pagina !== 'cal';
+  $('#reqPage').hidden = pagina !== 'req';
   $('#usersPage').hidden = pagina !== 'users';
   $('#atasPage').hidden = pagina !== 'atas';
   $('#btnNew').hidden = pagina !== 'cal';
-  for (const [id, pg] of [['#btnUsers', 'users'], ['#btnAtas', 'atas']] as const) {
-    const link = $(id);
-    if (pagina === pg) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-  }
-  const titulos: Record<Pagina, string> = { cal: '', users: 'Usuários · ', atas: 'Atas de reunião · ' };
-  document.title = titulos[pagina] + 'Calendário Mahanaim';
+  $('#appScreen').classList.toggle('sem-painel', pagina !== 'cal');
+  $$<HTMLAnchorElement>('#nav a').forEach(a => {
+    if (a.dataset['pg'] === pagina) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  const titulos: Record<Pagina, string> = {
+    cal: '', req: (isAdmin() ? 'Solicitações' : 'Minhas solicitações') + ' · ', users: 'Usuários · ', atas: 'Atas de reunião · ',
+  };
+  document.title = titulos[pagina] + 'Mahanaim · Gestão da liderança';
+  $('.content').scrollTop = 0;
   if (pagina === 'users') void renderUsers();
   if (pagina === 'atas') renderAtas();
+  if (pagina === 'req') renderRequests();
 }
 window.addEventListener('popstate', aplicarRota);
-$$<HTMLAnchorElement>('#btnUsers, #uBack, #btnAtas, #aBack').forEach(a => a.addEventListener('click', e => {
+$$<HTMLAnchorElement>('#nav a, #bell').forEach(a => a.addEventListener('click', e => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // abrir em nova aba continua funcionando
   e.preventDefault();
   navegar(a.getAttribute('href') ?? '/');
 }));
 
-// ---------- menu do usuário ----------
-const menu = $<HTMLDetailsElement>('#userMenu');
-document.addEventListener('click', e => { if (menu.open && !menu.contains(e.target as Node)) menu.open = false; });
+// =====================================================================
+// MENU LATERAL, TEMA E PAINEL
+// =====================================================================
+const shell = $('#appScreen');
+const side = $('#side');
+
+/** Recolhe/expande o menu (computador). No celular o menu é uma gaveta. */
+function aplicarMenu(recolhido: boolean): void {
+  side.classList.toggle('collapsed', recolhido);
+  const b = $('#collapse');
+  b.setAttribute('aria-expanded', String(!recolhido));
+  b.title = recolhido ? 'Expandir menu' : 'Recolher menu';
+  $('.lbl', b).textContent = b.title;
+}
+{
+  const pref = lerPref('mahanaim-menu');
+  aplicarMenu(pref ? pref === 'recolhido' : matchMedia('(max-width: 1100px)').matches);
+}
+$('#collapse').addEventListener('click', () => {
+  const recolher = !side.classList.contains('collapsed');
+  aplicarMenu(recolher);
+  gravarPref('mahanaim-menu', recolher ? 'recolhido' : 'aberto');
+});
+function fecharGaveta(): void { shell.classList.remove('gaveta', 'painel-aberto'); }
+$('#burger').addEventListener('click', () => shell.classList.add('gaveta'));
+$('#openPanel').addEventListener('click', () => shell.classList.add('painel-aberto'));
+$('#closePanel').addEventListener('click', () => shell.classList.remove('painel-aberto'));
+$('#scrim').addEventListener('click', fecharGaveta);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && (shell.classList.contains('gaveta') || shell.classList.contains('painel-aberto'))) fecharGaveta();
+});
+
+// ---------- tema: claro, escuro ou o do aparelho ----------
+type Tema = 'claro' | 'escuro' | 'sistema';
+const escuroDoSistema = matchMedia('(prefers-color-scheme: dark)');
+let tema: Tema = ((t): Tema => (t === 'claro' || t === 'escuro' ? t : 'sistema'))(lerPref('mahanaim-tema'));
+function aplicarTema(): void {
+  const escuro = tema === 'escuro' || (tema === 'sistema' && escuroDoSistema.matches);
+  document.documentElement.dataset['theme'] = escuro ? 'dark' : 'light';
+  $$<HTMLButtonElement>('#theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset['tema'] === tema)));
+}
+$$<HTMLButtonElement>('#theme button').forEach(b => b.addEventListener('click', () => {
+  const t = b.dataset['tema'];
+  tema = t === 'claro' || t === 'escuro' ? t : 'sistema';
+  gravarPref('mahanaim-tema', tema);
+  aplicarTema();
+}));
+escuroDoSistema.addEventListener('change', aplicarTema);
+aplicarTema();
+
 $('#mLogout').addEventListener('click', async () => {
-  menu.open = false;
   await api.logout();
   history.replaceState(null, '', '/');
   showLogin();
   toast('Você saiu.');
 });
-$('#mMine').addEventListener('click', () => { menu.open = false; openRequests(); });
 $('#mReset').addEventListener('click', async () => {
-  menu.open = false;
   const ok = await ask({ title: 'Restaurar dados de exemplo?', msg: 'Todas as alterações feitas neste navegador serão descartadas. Isso existe só no protótipo.', ok: 'Restaurar', danger: true });
   if (!ok) return;
   await api.resetDemo();
@@ -297,7 +368,7 @@ $('#mReset').addEventListener('click', async () => {
   toast('Dados de exemplo restaurados.');
 });
 $('#btnNew').addEventListener('click', () => openForm(isAdmin() ? { mode: 'create', ev: { data: defaultDate() } } : { mode: 'request', ev: { data: defaultDate() } }));
-$('#btnRequests').addEventListener('click', () => openRequests());
+$('#reqNew').addEventListener('click', () => openForm({ mode: 'request', ev: { data: defaultDate() } }));
 
 function defaultDate(): DataIso {
   if (view === 'dia' || view === 'semana') return keyOf(foco);
@@ -327,24 +398,65 @@ function tituloPeriodo(): string {
   }
 }
 
+/** Filtros por tipo de evento (no painel). Desmarcar esconde o tipo em todas as visões. */
 function buildLegend(): void {
   const lgd = $('#legend');
   lgd.replaceChildren();
   CATEGORIAS.forEach(c => {
-    const b = document.createElement('button');
-    setHtml(b, html`${dot(c)}${CATS[c].label}`);
-    b.setAttribute('aria-pressed', String(active.has(c)));
-    b.addEventListener('click', () => {
-      if (active.has(c)) active.delete(c); else active.add(c);
-      b.setAttribute('aria-pressed', String(active.has(c)));
+    const l = document.createElement('label');
+    l.style.setProperty('--c', color(c));
+    setHtml(l, html`<input type="checkbox" data-cat="${c}" ${active.has(c) ? raw('checked') : ''}>${CATS[c].label}<span class="n" data-n="${c}"></span>`);
+    $<HTMLInputElement>('input', l).addEventListener('change', ev => {
+      const on = (ev.currentTarget as HTMLInputElement).checked;
+      if (on) active.add(c); else active.delete(c);
       render();
     });
-    lgd.appendChild(b);
+    lgd.appendChild(l);
   });
-  const hint = document.createElement('span');
-  hint.className = 'hint';
-  hint.textContent = isAdmin() ? 'Toque num dia para ver, adicionar ou editar.' : 'Toque num dia para ver tudo ou solicitar um evento.';
-  lgd.appendChild(hint);
+}
+/** Quantos itens de cada tipo há no mês em foco (contando os escondidos). */
+function contarLegenda(): void {
+  const y = foco.getFullYear(), m = foco.getMonth(), dim = new Date(y, m + 1, 0).getDate();
+  const n: Partial<Record<Categoria, number>> = {};
+  for (let d = 1; d <= dim; d++) (IDX[key(y, m, d)] ?? []).forEach(e => { n[e.c] = (n[e.c] ?? 0) + 1; });
+  CATEGORIAS.forEach(c => { $(`[data-n="${c}"]`).textContent = String(n[c] ?? 0); });
+  $('#legendCount').textContent = `${active.size} de ${CATEGORIAS.length}`;
+}
+
+/** Minicalendário do painel: mês em foco, com pontinhos dos tipos de cada dia. */
+function renderMini(): void {
+  const y = foco.getFullYear(), m = foco.getMonth(), hoje = hojeKey(), fk = keyOf(foco);
+  $('#miniTitle').textContent = cap(`${nomeMes(m)} ${y}`);
+  const ini = inicioDaSemana(new Date(y, m, 1));
+  const semanas = Math.ceil((new Date(y, m, 1).getDay() + new Date(y, m + 1, 0).getDate()) / 7);
+  const dias: SafeHtml[] = [];
+  for (let i = 0; i < semanas * 7; i++) {
+    const d = somaDias(ini, i), k = keyOf(d);
+    const tipos = [...new Set(eventsOf(k).map(e => e.c))].slice(0, 3);
+    const cls = [d.getMonth() !== m ? 'out' : '', k === hoje ? 'today' : '', k === fk && view !== 'mes' && view !== 'ano' ? 'foco' : ''].filter(Boolean).join(' ');
+    dias.push(html`<button type="button" class="${cls}" data-k="${k}" aria-label="${d.getDate()} de ${nomeMes(d.getMonth())}">${d.getDate()}${tipos.length ? html`<span class="dots">${tipos.map(c => html`<i style="--c:${color(c)}"></i>`)}</span>` : ''}</button>`);
+  }
+  const box = $('#miniGrid');
+  setHtml(box, html`${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(w => html`<span class="wd" aria-hidden="true">${w}</span>`)}${dias}`);
+  $$<HTMLButtonElement>('button', box).forEach(b => b.addEventListener('click', () => {
+    foco = parseKey(b.dataset['k'] ?? hojeKey());
+    if (!isMobile() && (view === 'mes' || view === 'ano')) view = 'dia';
+    shell.classList.remove('painel-aberto');
+    render();
+  }));
+}
+$('#miniPrev').addEventListener('click', () => { foco = new Date(foco.getFullYear(), foco.getMonth() - 1, 1); render(); });
+$('#miniNext').addEventListener('click', () => { foco = new Date(foco.getFullYear(), foco.getMonth() + 1, 1); render(); });
+
+/** Período mostrado pela visão atual (usado pelo modo Lista). */
+function intervalo(): [Date, Date] {
+  const y = foco.getFullYear(), m = foco.getMonth();
+  switch (view) {
+    case 'dia': return [foco, foco];
+    case 'semana': { const a = inicioDaSemana(foco); return [a, somaDias(a, 6)]; }
+    case 'ano': return [new Date(y, 0, 1), new Date(y, 11, 31)];
+    default: return [new Date(y, m, 1), new Date(y, m + 1, 0)];
+  }
 }
 
 function render(): void {
@@ -353,10 +465,19 @@ function render(): void {
   $('#prev').setAttribute('aria-label', ant);
   $('#next').setAttribute('aria-label', prox);
   $$<HTMLButtonElement>('#views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset['v'] === view)));
+  $$<HTMLButtonElement>('#modo button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset['m'] === modo)));
   renderCampaign();
-  const telas: Record<Visao, string> = { mes: '#calView', semana: '#weekView', dia: '#dayView', ano: '#yearView', lista: '#listView' };
-  VISOES.forEach(v => { $(telas[v]).hidden = v !== view; });
-  ({ mes: renderGrid, semana: renderWeek, dia: renderDay, ano: renderYear, lista: renderList })[view]();
+  renderMini();
+  contarLegenda();
+  const info = $('#buscaInfo');
+  const lista = modo === 'lista' || !!busca;
+  const telas: Record<Visao, string> = { mes: '#calView', semana: '#weekView', dia: '#dayView', ano: '#yearView' };
+  (Object.keys(telas) as Visao[]).forEach(v => { $(telas[v]).hidden = lista || v !== view; });
+  $('#listView').hidden = !lista;
+  info.hidden = !busca;
+  if (busca) return renderBusca();
+  if (lista) return renderList(...intervalo());
+  ({ mes: renderGrid, semana: renderWeek, dia: renderDay, ano: renderYear })[view]();
 }
 
 function renderCampaign(): void {
@@ -368,7 +489,8 @@ function renderCampaign(): void {
   if (view === 'ano') return; // campanha é do mês; no ano não faz sentido
   if (camp) {
     box.className = 'campaign';
-    setHtml(box, html`<i class="ribbon" style="background:${color(camp.c)}"></i><strong>${camp.n}</strong><span>${camp.s}</span>${isAdmin() ? raw('<button class="btn sm ghost edit">Editar</button>') : ''}`);
+    box.style.setProperty('--c', color(camp.c));
+    setHtml(box, html`<small>Campanha do mês</small><b>${camp.n}</b><p>${camp.s}</p>${isAdmin() ? raw('<button type="button" class="edit">Editar campanha</button>') : ''}`);
     if (isAdmin()) $('.edit', box).addEventListener('click', () => openCampaign(ym));
   } else if (isAdmin()) {
     box.className = 'campaign add';
@@ -380,56 +502,80 @@ function renderCampaign(): void {
   }
 }
 
+/** Etiqueta do evento na grade: barra na cor do tipo + horário + título (no celular, só o nome curto). */
+const chip = (e: ItemDia): SafeHtml => html`<div class="chip${e.pend ? ' pend' : ''}" style="--c:${color(e.c)}">${e.t ? html`<span class="h">${e.t}</span>` : ''}<span class="tt">${e.n}</span><span class="ts" aria-hidden="true">${curto(e.n)}</span></div>`;
+
 function renderGrid(): void {
-  const y = foco.getFullYear(), m = foco.getMonth(), grid = $('#grid');
+  const y = foco.getFullYear(), m = foco.getMonth(), grid = $('#grid'), hoje = hojeKey(), fk = keyOf(foco);
   grid.replaceChildren();
-  const lead = new Date(y, m, 1).getDay(), dim = new Date(y, m + 1, 0).getDate(), hoje = hojeKey();
-  const blank = () => { const b = document.createElement('div'); b.className = 'day blank'; return b; };
-  for (let i = 0; i < lead; i++) grid.appendChild(blank());
-  for (let d = 1; d <= dim; d++) {
-    const k = key(y, m, d), list = eventsOf(k), w = new Date(y, m, d).getDay();
+  const ini = inicioDaSemana(new Date(y, m, 1));
+  const semanas = Math.ceil((new Date(y, m, 1).getDay() + new Date(y, m + 1, 0).getDate()) / 7);
+  for (let i = 0; i < semanas * 7; i++) {
+    const dt = somaDias(ini, i), k = keyOf(dt), list = eventsOf(k), d = dt.getDate();
     const cell = document.createElement('div');
-    cell.className = 'day' + (w === 0 ? ' sun' : '') + (k === hoje ? ' today' : '');
+    cell.className = 'day' + (dt.getMonth() !== m ? ' out' : '') + (k === hoje ? ' today' : '') + (k === fk ? ' sel' : '');
     if (list.some(e => e.c === 'feriado' && !e.pend)) cell.classList.add('hol');
-    const hl = list.find(e => !ROTINA.has(e.c) && !e.pend);
     setHtml(cell, html`
-      ${hl ? html`<span class="bar" style="background:${color(hl.c)}"></span>` : ''}
       <span class="num">${d}</span><span class="add-hint" aria-hidden="true">+</span>
-      ${list.length ? html`
-        <ul class="ev">${list.slice(0, 3).map(e => html`
-          <li class="${e.pend ? 'pend' : ''}" title="${(e.t ? e.t + ' ' : '') + label(e) + (e.pend ? ' (pendente)' : '')}">
-            ${dot(e.c, e.pend)}${e.t ? html`<span class="t">${e.t}</span>` : ''}<span class="n">${label(e)}</span>
-          </li>`)}
-        </ul>
-        ${list.length > 3 ? html`<span class="more">+${list.length - 3}</span>` : ''}
-        <div class="dots">${list.map(e => dot(e.c, e.pend))}</div>` : ''}
-    `);
+      ${list.slice(0, 3).map(chip)}
+      ${list.length > 3 ? html`<span class="more">+${list.length - 3}</span>` : ''}`);
+    cell.title = list.map(e => (e.t ? e.t + ' ' : '') + label(e) + (e.pend ? ' (pendente)' : '')).join('\n');
     cell.tabIndex = 0;
     cell.setAttribute('role', 'button');
-    cell.setAttribute('aria-label', `${d} de ${nomeMes(m)}, ${list.length} ${list.length === 1 ? 'item' : 'itens'}`);
-    cell.addEventListener('click', () => openDay(k));
-    cell.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(k); } });
+    cell.setAttribute('aria-label', `${d} de ${nomeMes(dt.getMonth())}, ${qtd(list.length)}`);
+    // Computador: abre o diálogo do dia. Celular: seleciona o dia e mostra a agenda embaixo da grade.
+    const abrir = () => {
+      if (!isMobile()) return openDay(k);
+      foco = dt;
+      render();
+      $('#agenda').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    cell.addEventListener('click', abrir);
+    cell.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
     grid.appendChild(cell);
   }
-  const trail = (7 - ((lead + dim) % 7)) % 7;
-  for (let i = 0; i < trail; i++) grid.appendChild(blank());
+  // Agenda do dia selecionado (aparece só no celular, pelo CSS)
+  const ag = $('#agenda');
+  setHtml(ag, html`<h2>${k2titulo(fk)}</h2><div class="dview"></div>`);
+  preencherDia($('.dview', ag), fk);
+}
+const k2titulo = (k: DataIso) => `${k === hojeKey() ? 'Hoje · ' : ''}${diaDaSemana(k)}, ${parseKey(k).getDate()} de ${nomeMes(parseKey(k).getMonth())}`;
+
+/** Lista de eventos agrupada por dia, de `de` até `ate`. */
+function renderList(de: Date, ate: Date): void {
+  const box = $('#listView'), dias: [DataIso, ItemDia[]][] = [];
+  for (let d = de; d <= ate; d = somaDias(d, 1)) { const k = keyOf(d), l = eventsOf(k); if (l.length) dias.push([k, l]); }
+  desenharLista(box, dias, 'Nenhum item neste período com os filtros escolhidos.');
+}
+function desenharLista(box: HTMLElement, dias: [DataIso, ItemDia[]][], vazio: string): void {
+  if (!dias.length) { setHtml(box, html`<p class="empty">${vazio}</p>`); return; }
+  const hoje = hojeKey();
+  setHtml(box, html`${dias.map(([k, list]) => html`<div class="grp">
+    <h3 class="${k === hoje ? 'hoje' : ''}">${k2titulo(k)}${parseKey(k).getFullYear() !== new Date().getFullYear() ? ` de ${parseKey(k).getFullYear()}` : ''}</h3>
+    ${list.map(e => html`<button type="button" class="row${e.pend ? ' pend' : ''}" data-k="${k}">
+      ${dot(e.c, e.pend)}<span class="t">${e.t ?? '—'}</span>
+      <span class="n">${e.n}${sub(e) ? html`<span class="l">${sub(e)}</span>` : ''}</span>
+      ${e.pend ? raw('<span class="badge pendente">Pendente</span>') : html`<span class="badge">${CATS[e.c].one}</span>`}
+    </button>`)}
+  </div>`)}`);
+  $$<HTMLButtonElement>('.row', box).forEach(b => b.addEventListener('click', () => openDay(b.dataset['k'] ?? hojeKey())));
 }
 
-function renderList(): void {
-  const y = foco.getFullYear(), m = foco.getMonth(), box = $('#listView');
-  box.replaceChildren();
-  const dim = new Date(y, m + 1, 0).getDate();
-  for (let d = 1; d <= dim; d++) {
-    const k = key(y, m, d), list = eventsOf(k);
-    if (!list.length) continue;
-    const row = document.createElement('div');
-    row.className = 'row';
-    setHtml(row, html`<div class="date">${d} de ${nomeMes(m)}<small>${diaDaSemana(k)}</small></div>
-      <ul>${list.map(e => html`<li class="${e.pend ? 'pend' : ''}">${dot(e.c, e.pend)}<span class="t">${e.t ?? ''}</span><span>${e.n}${sub(e) ? html` <span class="l">– ${sub(e)}</span>` : ''}${e.pend ? raw(' <span class="badge pendente">Pendente</span>') : ''}</span></li>`)}</ul>`);
-    row.addEventListener('click', () => openDay(k));
-    box.appendChild(row);
-  }
-  if (!box.children.length) setHtml(box, html`<p class="empty">Nenhum item neste mês com os filtros escolhidos. Ative mais tipos na legenda abaixo.</p>`);
+/** Resultado da busca do topo: todos os dias com itens que batem com o texto (título ou local). */
+function renderBusca(): void {
+  const termos = normalizar(busca).split(/\s+/).filter(Boolean);
+  const dias = (Object.keys(IDX) as DataIso[]).sort()
+    .map((k): [DataIso, ItemDia[]] => [k, eventsOf(k).filter(e => {
+      const t = normalizar([e.n, ...onde(e)].join(' '));
+      return termos.every(x => t.includes(x));
+    })])
+    .filter(([, l]) => l.length);
+  const hoje = hojeKey();
+  // Próximos primeiro; os que já passaram vão para o fim
+  const ordenados = [...dias.filter(([k]) => k >= hoje), ...dias.filter(([k]) => k < hoje).reverse()];
+  const n = ordenados.reduce((s, [, l]) => s + l.length, 0);
+  $('#buscaInfo').textContent = n ? `${qtd(n)} para “${busca}”. Próximos primeiro.` : '';
+  desenharLista($('#listView'), ordenados, `Nada encontrado para “${busca}”.`);
 }
 
 /** Torna o elemento um botão que abre o diálogo do dia (clique, Enter ou espaço). */
@@ -448,7 +594,7 @@ function renderWeek(): void {
   for (let i = 0; i < 7; i++) {
     const dt = somaDias(a, i), k = keyOf(dt), list = eventsOf(k);
     const col = document.createElement('div');
-    col.className = 'wday' + (i === 0 ? ' sun' : '') + (k === hoje ? ' today' : '');
+    col.className = 'wday' + (k === hoje ? ' today' : '');
     if (list.some(e => e.c === 'feriado' && !e.pend)) col.classList.add('hol');
     setHtml(col, html`
       <div class="h"><small>${SEM_C[i]}</small><b>${dt.getDate()}</b></div>
@@ -462,8 +608,9 @@ function renderWeek(): void {
   }
 }
 
-function renderDay(): void {
-  const box = $('#dayView'), k = keyOf(foco), list = eventsOf(k), adm = isAdmin();
+/** Itens de um dia em cartões + botão de adicionar/solicitar (visão Dia e agenda do celular). */
+function preencherDia(box: HTMLElement, k: DataIso): void {
+  const list = eventsOf(k), adm = isAdmin();
   box.replaceChildren();
   list.forEach(e => {
     const row = document.createElement('div');
@@ -477,11 +624,13 @@ function renderDay(): void {
   });
   if (!list.length) setHtml(box, html`<p class="empty">Nada marcado neste dia.</p>`);
   const add = document.createElement('button');
-  add.className = 'btn add-dia';
+  add.type = 'button';
+  add.className = 'btn primary add-dia';
   add.textContent = adm ? '+ Adicionar neste dia' : '+ Solicitar evento neste dia';
   add.addEventListener('click', () => openForm(adm ? { mode: 'create', ev: { data: k } } : { mode: 'request', ev: { data: k } }));
   box.appendChild(add);
 }
+function renderDay(): void { preencherDia($('#dayView'), keyOf(foco)); }
 
 function renderYear(): void {
   const box = $('#yearView'), y = foco.getFullYear(), hoje = hojeKey();
@@ -694,7 +843,7 @@ f.form.addEventListener('submit', async ev => {
       irPara(dados.data);
     }
     reopenDay();
-    if (reqDlg.open) renderRequests();
+    if (!$('#reqPage').hidden) renderRequests();
   } catch (err) {
     mostrarErro(mensagemDoErro(err));
     if (isApiError(err) && err.codigo === 'NAO_AUTENTICADO') showLogin();
@@ -747,22 +896,20 @@ function ask(o: AskOpts): Promise<AskResult | null> {
 }
 
 // =====================================================================
-// SOLICITAÇÕES
+// SOLICITAÇÕES — tela própria em /solicitacoes
 // =====================================================================
-const reqDlg = $<HTMLDialogElement>('#reqDlg');
 let reqTab: StatusSolicitacao = 'pendente';
 
 function openRequests(tab: StatusSolicitacao = 'pendente'): void {
   reqTab = tab;
+  if (paginaAtual() === 'req') renderRequests(); else navegar(CAMINHO.req);
+}
+
+function renderRequests(): void {
   $('#reqTitle').textContent = isAdmin() ? 'Solicitações' : 'Minhas solicitações';
   $('#reqSub').textContent = isAdmin()
     ? 'Tudo o que entra no calendário a pedido dos membros passa por aqui.'
     : 'Acompanhe o que você pediu para a liderança.';
-  renderRequests();
-  if (!reqDlg.open) reqDlg.showModal();
-}
-
-function renderRequests(): void {
   const abas: [StatusSolicitacao, string][] = [['pendente', 'Pendentes'], ['aprovada', 'Aprovadas'], ['recusada', 'Recusadas']];
   const tabs = $('#reqTabs');
   setHtml(tabs, html`${abas.map(([k, l]) =>
@@ -818,7 +965,7 @@ function renderRequests(): void {
   }));
   $$('[data-goto]', box).forEach(b => b.addEventListener('click', () => {
     const r = porId(b, 'goto'); if (!r) return;
-    reqDlg.close();
+    navegar(CAMINHO.cal);
     irPara(r.evento.data);
     openDay(r.evento.data);
   }));
@@ -963,7 +1110,7 @@ function showCredentials(u: Usuario, senha: string): void {
   copiar.textContent = 'Copiar acesso';
   copiar.onclick = async () => {
     try {
-      await navigator.clipboard.writeText(`Calendário Mahanaim\nE-mail: ${u.email}\nSenha provisória: ${senha}\nNo primeiro acesso você vai criar uma senha nova.`);
+      await navigator.clipboard.writeText(`Mahanaim · Gestão da liderança\nE-mail: ${u.email}\nSenha provisória: ${senha}\nNo primeiro acesso você vai criar uma senha nova.`);
       copiar.textContent = 'Copiado ✓';
     } catch { toast('Não foi possível copiar. Selecione e copie manualmente.', true); }
   };
@@ -1113,7 +1260,7 @@ $('#ataDel').addEventListener('click', async () => {
 $('#ataGoto').addEventListener('click', () => {
   const ev = ataAberta?.eventoId ? EVENTS.find(e => e.id === ataAberta?.eventoId) : undefined;
   if (!ev) return;
-  navegar('/');
+  navegar(CAMINHO.cal);
   irPara(ev.data);
   openDay(ev.data);
 });
@@ -1220,13 +1367,32 @@ function step(n: number): void {
   else foco = new Date(y, m + n, 1);
   render();
 }
+/** Sai da busca (se houver) para mostrar o calendário de novo. */
+function limparBusca(): void {
+  if (!busca) return;
+  busca = '';
+  $<HTMLInputElement>('#busca').value = '';
+}
 $('#prev').addEventListener('click', () => step(-1));
 $('#next').addEventListener('click', () => step(1));
-$('#today').addEventListener('click', () => irPara(hojeKey()));
+$('#today').addEventListener('click', () => { limparBusca(); irPara(hojeKey()); });
 $$<HTMLButtonElement>('#views button').forEach(b => b.addEventListener('click', () => {
-  view = (b.dataset['v'] ?? 'mes') as Visao;
+  const v = b.dataset['v'];
+  view = v === 'semana' || v === 'dia' || v === 'ano' ? v : 'mes';
+  limparBusca();
   render();
 }));
+$$<HTMLButtonElement>('#modo button').forEach(b => b.addEventListener('click', () => {
+  modo = b.dataset['m'] === 'lista' ? 'lista' : 'cal';
+  gravarPref('mahanaim-modo', modo);
+  limparBusca();
+  render();
+}));
+$<HTMLInputElement>('#busca').addEventListener('input', ev => {
+  busca = (ev.currentTarget as HTMLInputElement).value.trim();
+  if (paginaAtual() !== 'cal') navegar(CAMINHO.cal);
+  render();
+});
 $$<HTMLDialogElement>('dialog').forEach(d => {
   $$('[data-close]', d).forEach(b => b.addEventListener('click', () => d.close()));
   d.addEventListener('click', e => { if (e.target === d && !d.hasAttribute('data-sticky')) d.close(); });
@@ -1235,6 +1401,7 @@ function closeAll(): void { $$<HTMLDialogElement>('dialog[open]').forEach(d => d
 document.addEventListener('keydown', e => {
   const alvo = e.target as HTMLElement;
   if (document.querySelector('dialog[open]') || $('#appScreen').hidden || $('#calPage').hidden || /INPUT|TEXTAREA|SELECT/.test(alvo.tagName)) return;
+  if (busca) return;
   if (e.key === 'ArrowLeft') step(-1);
   if (e.key === 'ArrowRight') step(1);
 });
