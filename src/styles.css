@@ -99,16 +99,15 @@ input:disabled{opacity:.55}
 .frame{background:var(--frame);border:1px solid var(--line);border-radius:22px;padding:22px 24px 18px}
 .top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;margin-bottom:14px}
 .brand{font-size:14px;color:var(--muted);font-weight:500;margin:0 0 2px}
-h1#title{margin:0;font-size:30px;font-weight:700;letter-spacing:-0.02em;line-height:1.15}
-.controls{display:flex;gap:8px;align-items:center}
-.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--cell)}
-.seg button{border:0;background:transparent;padding:0 14px;height:36px;cursor:pointer;color:var(--muted);font-weight:500}
-.seg button[aria-pressed="true"]{background:var(--hover);color:var(--text)}
-
-.months{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 14px}
-.months button{flex:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted);cursor:pointer;white-space:nowrap}
-.months button:hover{background:var(--hover)}
-.months button[aria-current="true"]{background:var(--text);color:var(--frame);border-color:var(--text)}
+/* Barra do calendário: abas à esquerda, período no centro, "Hoje" à direita */
+.calbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px 16px;margin-bottom:14px}
+.vtabs{justify-self:start;display:flex;gap:2px;background:var(--hover);border:1px solid var(--line);border-radius:12px;padding:3px}
+.vtabs button{border:0;background:transparent;height:32px;padding:0 13px;border-radius:9px;cursor:pointer;color:var(--muted);font-weight:600;font-size:14px;white-space:nowrap}
+.vtabs button:hover{color:var(--text)}
+.vtabs button[aria-pressed="true"]{background:var(--cell);color:var(--text);box-shadow:0 0 0 1px var(--line)}
+.period{justify-self:center;display:flex;align-items:center;gap:10px}
+h1#title{margin:0;font-size:20px;font-weight:700;letter-spacing:-0.01em;line-height:1.2;min-width:230px;text-align:center}
+#today{justify-self:end}
 
 .campaign{display:flex;align-items:center;gap:10px;border-radius:12px;padding:9px 10px 9px 14px;margin-bottom:14px;font-size:14px;border:1px solid var(--line);background:var(--cell);min-height:44px}
 .campaign .ribbon{width:10px;height:22px;border-radius:3px;flex:none}
@@ -152,6 +151,52 @@ h1#title{margin:0;font-size:30px;font-weight:700;letter-spacing:-0.02em;line-hei
 .legend button:hover{background:var(--hover)}
 .legend button[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
 .legend .hint{color:var(--faint);font-size:13px;align-self:center;margin-left:auto}
+
+/* ---------- Semana ---------- */
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.wday{background:var(--cell);border:1px solid var(--line);border-radius:14px;min-height:340px;padding:12px 10px;cursor:pointer;display:flex;flex-direction:column;gap:10px;outline:none;min-width:0}
+.wday:hover{background:var(--hover)}
+.wday:focus-visible{box-shadow:0 0 0 2px var(--culto)}
+.wday.today{border-color:var(--text)}
+.wday .h{display:flex;align-items:center;gap:8px}
+.wday .h small{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
+.wday .h b{font-size:18px;line-height:28px;min-width:28px;text-align:center}
+.wday.sun .h b{color:var(--muted)}
+.wday.hol .h b{color:var(--feriado)}
+.wday.today .h b{background:var(--text);color:var(--frame);border-radius:999px;padding:0 7px}
+.wev{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.wev li{border-left:3px solid var(--c);padding:1px 0 1px 8px;font-size:13px;line-height:1.3;overflow-wrap:break-word;hyphens:auto}
+.wev li .t{display:block;color:var(--muted);font-size:12px}
+.wev li.pend{border-left-style:dashed;font-style:italic;color:var(--muted)}
+.wday .nada{color:var(--faint);font-size:13px}
+
+/* ---------- Dia ---------- */
+.dview{display:grid;gap:8px}
+.dview .slot{display:grid;grid-template-columns:80px 1fr;gap:14px;align-items:baseline;background:var(--cell);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:12px 16px;cursor:pointer;outline:none}
+.dview .slot:hover{background:var(--hover)}
+.dview .slot:focus-visible{box-shadow:0 0 0 2px var(--culto)}
+.dview .slot.pend{border-style:dashed;border-left-style:dashed}
+.dview .slot.pend .n{font-style:italic}
+.dview .t{color:var(--muted);font-weight:600}
+.dview .n{font-weight:600;font-size:15.5px}
+.dview .l{display:block;color:var(--muted);font-size:13.5px;font-weight:400}
+.dview .k{display:block;color:var(--faint);font-size:12.5px;font-weight:400}
+.dview .empty{padding:24px 0 8px}
+.dview .add-dia{justify-self:start;margin-top:4px}
+
+/* ---------- Ano ---------- */
+.year{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.mini{display:flex;flex-direction:column;justify-content:flex-start;background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.mini:hover{background:var(--hover)}
+.mini:focus-visible{outline:2px solid var(--culto);outline-offset:2px}
+.mini.cur{border-color:var(--text)}
+.mini h3{margin:0 0 8px;font-size:15px}
+.mini .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12.5px}
+.mini .g span{line-height:24px;border-radius:999px}
+.mini .g .w{color:var(--faint);font-weight:600;font-size:11px;line-height:18px}
+.mini .g .esp{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.mini .g .hol{color:var(--feriado);font-weight:700}
+.mini .g .today{background:var(--text);color:var(--frame);font-weight:700}
 
 .list{display:grid;gap:10px}
 .list .row{display:grid;grid-template-columns:120px 1fr;gap:16px;background:var(--cell);border:1px solid var(--line);border-radius:14px;padding:12px 16px;cursor:pointer}
@@ -266,6 +311,13 @@ a.btn{text-decoration:none;color:inherit}
 .toast.bad{background:var(--feriado);color:#fff}
 
 @media (max-width:900px){
+  .calbar{grid-template-columns:1fr auto 1fr}
+  .vtabs{grid-column:1/-1;justify-self:center}
+  .period{grid-column:2}
+  #today{grid-column:3}
+  .week{grid-template-columns:1fr;gap:8px}
+  .wday{min-height:0;display:grid;grid-template-columns:70px 1fr;align-items:start}
+  .year{grid-template-columns:repeat(3,minmax(0,1fr))}
   .day{min-height:120px;padding:10px 9px}
   .ev li{font-size:12.5px}
   .ev .t{display:none}
@@ -274,7 +326,18 @@ a.btn{text-decoration:none;color:inherit}
 @media (max-width:680px){
   .wrap{padding:12px 12px 28px}
   .frame{padding:16px 12px 14px;border-radius:18px}
-  h1#title{font-size:24px}
+  .calbar{grid-template-columns:1fr auto;gap:10px}
+  .vtabs{justify-self:stretch}
+  .vtabs button{flex:1;padding:0 6px;font-size:13px}
+  .period{grid-column:1;justify-self:start;gap:6px}
+  #today{grid-column:2}
+  h1#title{font-size:16px;min-width:0;text-align:left}
+  .wday{grid-template-columns:56px 1fr}
+  .dview .slot{grid-template-columns:62px 1fr;gap:10px;padding:10px 12px}
+  .year{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .mini{padding:10px 8px 8px}
+  .mini .g{font-size:11.5px}
+  .mini .g span{line-height:20px}
   .wk,.grid{gap:4px}
   .wk .l{display:none}.wk .s{display:block}
   .day{min-height:64px;padding:7px 6px;border-radius:10px}
