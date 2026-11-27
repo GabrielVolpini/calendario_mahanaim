@@ -468,3 +468,11 @@ fieldset .check{margin-bottom:8px}
   .list .row{gap:10px}
 }
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+
+/* ================= APP INSTALÁVEL (PWA) ================= */
+.ios-passos{margin:4px 0 12px;padding-left:22px;display:grid;gap:10px;line-height:1.5}
+.ios-passos .i{width:18px;height:18px;vertical-align:-3px;color:var(--primary)}
+:root[data-theme="dark"] .ios-passos .i{color:var(--text)}
+.atualizar{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:10px;background:var(--frame);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 16px;box-shadow:var(--shadow);font-size:14px;font-weight:600;max-width:calc(100vw - 32px);width:max-content}
+.atualizar .btn{padding:7px 12px}
+.login .linkbtn[data-instalar]{color:var(--muted)}

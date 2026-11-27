@@ -10,6 +10,7 @@ import {
   type Evento, type EventoDados, type SolicitacaoView, type StatusSolicitacao, type Usuario,
 } from './domain/types';
 import { $, $$, html, raw, setHtml, type SafeHtml } from './ui/dom';
+import { iniciarPWA } from './pwa';
 import {
   cap, diaDaSemana, fmtDate, fmtShort, fmtWhen, hojeKey, horaParaInput, iniciais,
   inputParaHora, key, minutos, nomeMes, parseKey,
@@ -1402,6 +1403,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') step(-1);
   if (e.key === 'ArrowRight') step(1);
 });
+
+iniciarPWA();
 
 void (async function init() {
   const t = new Date();

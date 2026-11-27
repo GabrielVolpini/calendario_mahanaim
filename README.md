@@ -43,6 +43,17 @@ que usa as Edge Functions `criar-usuario` e `excluir-usuario`.
 > ao publicar o `dist/`, configure o servidor para devolver o `index.html` em qualquer caminho
 > (ex.: *rewrite* `/* → /index.html`). Na Vercel isso já está no `vercel.json`; arquivos que existem (como `/assets/...` e o logo) continuam sendo servidos normalmente.
 
+### App no celular (PWA)
+
+O site também é um **app instalável** no Android e no iPhone (gerado pelo `vite-plugin-pwa` no `npm run build`).
+
+- **Android (Chrome/Edge):** aparece o botão **Instalar app** (no menu lateral e na tela de login), que abre o pedido de instalação do navegador.
+- **iPhone/iPad:** o mesmo botão abre o passo a passo: **Compartilhar → Adicionar à Tela de Início** (no Safari).
+- Só funciona em **HTTPS** (a Vercel já serve assim). No `npm run dev` o service worker fica desligado; para testar, use `npm run build` e `npm run preview`.
+- Os dados do Supabase **não** ficam em cache: sempre vêm do banco. Fica guardada só a interface do app.
+- Quando sai uma versão nova, o app mostra **"Nova versão do app disponível"** e só recarrega quando a pessoa toca em Atualizar.
+- Ícones: troque `public/logo-mahanaim.jpg` e rode `node scripts/gerar-icones.ts` (saem em `public/icons/`).
+
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | servidor de desenvolvimento (recarrega sozinho) |
